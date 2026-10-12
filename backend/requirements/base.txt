@@ -1,0 +1,10 @@
+# Core Django & REST Framework
+Django>=5.1.0,<6.0.0
+djangorestframework>=3.15.0
+django-cors-headers>=4.4.0
+
+# Database Driver (Psycopg 3 with C-extension / pre-built binary)
+psycopg[binary]>=3.2.0
+
+# Environment Configuration
+python-dotenv>=1.0.1

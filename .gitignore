@@ -1,0 +1,102 @@
+# ==========================================
+# TEXORA AI - COMPREHENSIVE GITIGNORE
+# ==========================================
+
+# 1. Environment, Secrets & Local Credentials
+.env
+.env.*
+*.env
+!*.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+*.crt
+*.id_rsa
+local_settings.py
+
+# 2. Python & Virtual Environments
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+env.bak/
+venv.bak/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+
+# 3. Databases & Local Data Dumps
+*.sqlite3*
+*.sqlite*
+*.db*
+*.dump
+*.sql
+*.backup*
+*.bak
+backend/texora_local.*
+
+# 4. Flutter, Dart & Frontend Build Artifacts
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+frontend/build/
+frontend/.dart_tool/
+frontend/.flutter-plugins
+frontend/.flutter-plugins-dependencies
+frontend/.packages
+frontend/.pub-cache/
+frontend/.pub/
+*.iml
+*.ipr
+*.iws
+app.*.symbols
+app.*.map.json
+
+# PRESERVE FLUTTER APPLICATION SOURCE AND TESTS
+!frontend/lib/
+!frontend/lib/**
+!frontend/test/
+!frontend/test/**
+
+# 5. OS & Editor Artifacts
+.DS_Store
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# 6. Antigravity & Agent System Artifacts
+.system_generated/
+scratch/
+brain/
+.agents/
+.gemini/

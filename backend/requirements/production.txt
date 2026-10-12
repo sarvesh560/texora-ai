@@ -1,0 +1,6 @@
+-r base.txt
+
+# Production ASGI / WSGI Server
+gunicorn>=23.0.0
+uvicorn[standard]>=0.30.0
+whitenoise>=6.7.0

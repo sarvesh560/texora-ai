@@ -1,0 +1,1 @@
+"""Factories app package."""
