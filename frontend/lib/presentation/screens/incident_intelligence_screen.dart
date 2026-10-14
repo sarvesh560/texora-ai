@@ -1,10 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import '../../core/constants/app_colors.dart';
+import '../../core/theme/texora_design_system.dart';
 import '../../data/models/incident_model.dart';
 import '../../data/services/api_service.dart';
 import '../widgets/autonomous_workflow_monitor.dart';
 import '../widgets/business_impact_card.dart';
+import 'audit_trail_screen.dart';
 
 class IncidentIntelligenceScreen extends StatefulWidget {
   final ApiService? apiService;
@@ -121,6 +122,26 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
     });
   }
 
+  void _openAuditTrailDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: SizedBox(
+            width: 1000,
+            height: 750,
+            child: AuditTrailScreen(
+              onClose: () => Navigator.of(ctx).pop(),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   List<FactoryIncidentModel> get _filteredIncidents {
     return _incidents.where((inc) {
       if (_searchQuery.isNotEmpty) {
@@ -151,7 +172,7 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: TexoraColors.workspaceBg,
       body: Row(
         children: [
           // Main Incidents List & Controls
@@ -180,8 +201,8 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
               flex: 6,
               child: Container(
                 decoration: const BoxDecoration(
-                  color: Color(0xFF0D1424),
-                  border: Border(left: BorderSide(color: Color(0xFF1E293B), width: 1.5)),
+                  color: TexoraColors.cardBg,
+                  border: Border(left: BorderSide(color: TexoraColors.cardBorder, width: 1.5)),
                 ),
                 child: _buildDetailWorkspace(),
               ),
@@ -204,11 +225,11 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: const Color(0xFFEF4444).withAlpha(30),
+                color: TexoraColors.criticalBg,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFFEF4444).withAlpha(100)),
+                border: Border.all(color: TexoraColors.criticalBorder),
               ),
-              child: const Icon(Icons.radar_rounded, color: Color(0xFFEF4444), size: 22),
+              child: const Icon(Icons.radar_rounded, color: TexoraColors.criticalText, size: 22),
             ),
             const SizedBox(width: 12),
             ConstrainedBox(
@@ -218,11 +239,11 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
                 children: [
                   Text(
                     'Incident Intelligence & Abnormality Management',
-                    style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                    style: TextStyle(color: TexoraColors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   Text(
                     'Real-time automated anomaly triage, AI diagnostics, and strategy workflows',
-                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                    style: TextStyle(color: TexoraColors.textSecondary, fontSize: 12),
                   ),
                 ],
               ),
@@ -232,8 +253,19 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            OutlinedButton.icon(
+              onPressed: _openAuditTrailDialog,
+              icon: const Icon(Icons.shield_outlined, size: 15, color: TexoraColors.primaryBlue),
+              label: const Text('Audit Trail', style: TextStyle(color: TexoraColors.primaryBlue, fontSize: 12, fontWeight: FontWeight.w600)),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: TexoraColors.primaryLightBorder),
+                backgroundColor: TexoraColors.primaryLight,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              ),
+            ),
+            const SizedBox(width: 8),
             IconButton(
-              icon: const Icon(Icons.refresh_rounded, color: Color(0xFF38BDF8)),
+              icon: const Icon(Icons.refresh_rounded, color: TexoraColors.primaryBlue),
               onPressed: () => _loadData(),
               tooltip: 'Refresh Incidents',
             ),
@@ -241,15 +273,15 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
-                color: const Color(0xFF1E293B),
+                color: TexoraColors.cardBg,
                 borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: const Color(0xFF334155)),
+                border: Border.all(color: TexoraColors.cardBorder),
               ),
               child: Row(
-                children: [
-                  Container(width: 8, height: 8, decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF10B981))),
-                  const SizedBox(width: 6),
-                  const Text('AI MONITOR ACTIVE', style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600)),
+                children: const [
+                  Icon(Icons.circle, size: 8, color: TexoraColors.successText),
+                  SizedBox(width: 6),
+                  Text('AI MONITOR ACTIVE', style: TextStyle(color: TexoraColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w600)),
                 ],
               ),
             ),
@@ -290,16 +322,16 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: const Color(0xFF131C31),
+          color: TexoraColors.cardBg,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: const Color(0xFF1E293B)),
+          border: Border.all(color: TexoraColors.cardBorder),
         ),
         child: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: color.withAlpha(30),
+                color: color.withAlpha(20),
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Icon(icon, color: color, size: 18),
@@ -310,8 +342,8 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(value, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
-                  Text(label, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11), overflow: TextOverflow.ellipsis),
+                  Text(value, style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
+                  Text(label, style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 11), overflow: TextOverflow.ellipsis),
                 ],
               ),
             ),
@@ -325,9 +357,9 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
+        color: TexoraColors.cardBg,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFF1E293B)),
+        border: Border.all(color: TexoraColors.cardBorder),
       ),
       child: Wrap(
         spacing: 10,
@@ -339,16 +371,16 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
             width: 220,
             child: TextField(
               onChanged: (val) => setState(() => _searchQuery = val),
-              style: const TextStyle(color: Colors.white, fontSize: 12),
+              style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 12),
               decoration: InputDecoration(
                 hintText: 'Search ID, machine, summary...',
-                hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
-                prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 16),
+                hintStyle: const TextStyle(color: TexoraColors.textMuted, fontSize: 12),
+                prefixIcon: const Icon(Icons.search_rounded, color: TexoraColors.textMuted, size: 16),
                 isDense: true,
                 contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF334155))),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF334155))),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF38BDF8))),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: TexoraColors.cardBorder)),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: TexoraColors.cardBorder)),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: TexoraColors.primaryBlue)),
               ),
             ),
           ),
@@ -370,16 +402,16 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: TexoraColors.workspaceBg,
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: const Color(0xFF334155)),
+        border: Border.all(color: TexoraColors.cardBorder),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: value,
-          dropdownColor: const Color(0xFF1E293B),
-          style: const TextStyle(color: Colors.white, fontSize: 12),
-          icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF94A3B8), size: 16),
+          dropdownColor: TexoraColors.cardBg,
+          style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 12),
+          icon: const Icon(Icons.keyboard_arrow_down_rounded, color: TexoraColors.textSecondary, size: 16),
           items: options.map((opt) => DropdownMenuItem(value: opt, child: Text('$label: $opt'))).toList(),
           onChanged: (val) {
             if (val != null) onChanged(val);
@@ -391,7 +423,7 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
 
   Widget _buildIncidentTable() {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: CircularProgressIndicator(color: TexoraColors.primaryBlue));
     }
 
     if (_errorMessage != null) {
@@ -399,11 +431,15 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.error_outline_rounded, color: AppColors.errorRed, size: 36),
+            const Icon(Icons.error_outline_rounded, color: TexoraColors.criticalText, size: 36),
             const SizedBox(height: 8),
-            Text('Failed to load incidents: $_errorMessage', style: const TextStyle(color: Colors.white70)),
+            Text('Failed to load incidents: $_errorMessage', style: const TextStyle(color: TexoraColors.textPrimary)),
             const SizedBox(height: 12),
-            ElevatedButton(onPressed: _loadData, child: const Text('Retry')),
+            ElevatedButton(
+              onPressed: _loadData,
+              style: ElevatedButton.styleFrom(backgroundColor: TexoraColors.primaryBlue, foregroundColor: Colors.white),
+              child: const Text('Retry'),
+            ),
           ],
         ),
       );
@@ -416,37 +452,37 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
           child: Container(
             padding: const EdgeInsets.all(28),
             decoration: BoxDecoration(
-              color: const Color(0xFF0F172A),
+              color: TexoraColors.cardBg,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFF1E293B)),
+              border: Border.all(color: TexoraColors.cardBorder),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.shield_outlined, color: Color(0xFF38BDF8), size: 42),
+                const Icon(Icons.shield_outlined, color: TexoraColors.primaryBlue, size: 42),
                 const SizedBox(height: 12),
                 const Text(
                   'No Operational Incidents Recorded',
-                  style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                  style: TextStyle(color: TexoraColors.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 6),
                 const Text(
                   'Continuous telemetry surveillance and anomaly detection are active.\nNo machine abnormalities or safety limit breaches are currently detected.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12, height: 1.4),
+                  style: TextStyle(color: TexoraColors.textSecondary, fontSize: 12, height: 1.4),
                 ),
                 if (_summary?.checkpoint != null) ...[
                   const SizedBox(height: 16),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B),
+                      color: TexoraColors.workspaceBg,
                       borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: const Color(0xFF334155)),
+                      border: Border.all(color: TexoraColors.cardBorder),
                     ),
                     child: Text(
                       'Detector Daemon: ${_summary!.checkpoint.isThreadAlive ? "ACTIVE (Scanning telemetry)" : "DAEMON (Periodic batch evaluation)"} • Total Telemetry Evaluated: ${_summary!.checkpoint.totalTelemetryProcessed}',
-                      style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 11, fontFamily: 'monospace'),
+                      style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 11, fontFamily: 'monospace'),
                     ),
                   ),
                 ],
@@ -461,9 +497,9 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
         child: Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: const Color(0xFF0F172A),
+            color: TexoraColors.cardBg,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: const Color(0xFF1E293B)),
+            border: Border.all(color: TexoraColors.cardBorder),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -472,13 +508,13 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
               const SizedBox(height: 10),
               const Text(
                 'No Incidents Match Selected Filters',
-                style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                style: TextStyle(color: TexoraColors.textPrimary, fontSize: 15, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 4),
               Text(
                 '0 matching of ${_incidents.length} total database incidents.\nTry clearing the search query or resetting filters.',
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 12),
               ),
               const SizedBox(height: 14),
               ElevatedButton.icon(
@@ -493,9 +529,10 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
                 icon: const Icon(Icons.clear_all_rounded, size: 16),
                 label: const Text('Clear All Filters', style: TextStyle(fontSize: 12)),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF1E293B),
-                  foregroundColor: Colors.white,
-                  side: const BorderSide(color: Color(0xFF334155)),
+                  backgroundColor: TexoraColors.primaryLight,
+                  foregroundColor: TexoraColors.primaryBlue,
+                  elevation: 0,
+                  side: const BorderSide(color: TexoraColors.primaryLightBorder),
                 ),
               ),
             ],
@@ -506,19 +543,19 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
 
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
+        color: TexoraColors.cardBg,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFF1E293B)),
+        border: Border.all(color: TexoraColors.cardBorder),
       ),
       child: ListView.separated(
         itemCount: filtered.length,
-        separatorBuilder: (_, _) => const Divider(color: Color(0xFF1E293B), height: 1),
+        separatorBuilder: (_, _) => const Divider(color: TexoraColors.cardBorder, height: 1),
         itemBuilder: (context, index) {
           final inc = filtered[index];
           final isSelected = _selectedIncident?.id == inc.id;
 
           return Material(
-            color: isSelected ? const Color(0xFF1E293B).withAlpha(150) : Colors.transparent,
+            color: isSelected ? TexoraColors.primaryLight : Colors.transparent,
             child: ListTile(
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
               onTap: () => _openIncidentWorkspace(inc),
@@ -528,21 +565,22 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
                 spacing: 8,
                 runSpacing: 4,
                 children: [
-                  Text(inc.incidentCode, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                  Text(inc.incidentCode, style: const TextStyle(color: TexoraColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 13)),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF2563EB).withAlpha(30),
+                      color: TexoraColors.primaryLight,
                       borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: TexoraColors.primaryLightBorder),
                     ),
                     child: Text(
                       inc.machineCode ?? 'UNKNOWN',
-                      style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.w600),
+                      style: const TextStyle(color: TexoraColors.primaryBlue, fontSize: 11, fontWeight: FontWeight.w600),
                     ),
                   ),
                   Text(
                     '• ${inc.departmentName.isNotEmpty ? inc.departmentName : inc.departmentCode}',
-                    style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                    style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 12),
                   ),
                 ],
               ),
@@ -550,7 +588,7 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
                 padding: const EdgeInsets.only(top: 4.0),
                 child: Text(
                   inc.summary,
-                  style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 12),
+                  style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 12),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -563,12 +601,14 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
                   ElevatedButton(
                     onPressed: () => _openIncidentWorkspace(inc),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: isSelected ? const Color(0xFF0284C7) : const Color(0xFF1E293B),
-                      foregroundColor: Colors.white,
+                      backgroundColor: isSelected ? TexoraColors.primaryBlue : TexoraColors.workspaceBg,
+                      foregroundColor: isSelected ? Colors.white : TexoraColors.primaryBlue,
+                      elevation: 0,
+                      side: BorderSide(color: isSelected ? TexoraColors.primaryBlue : TexoraColors.cardBorder),
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                     ),
-                    child: const Text('Workspace ➔', style: TextStyle(fontSize: 10.5)),
+                    child: const Text('Workspace ➔', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600)),
                   ),
                 ],
               ),
@@ -589,14 +629,14 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
         color = const Color(0xFFF97316);
         break;
       case 'MEDIUM':
-        color = const Color(0xFFFBBF24);
+        color = const Color(0xFFF59E0B);
         break;
       default:
-        color = const Color(0xFF38BDF8);
+        color = TexoraColors.primaryBlue;
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(color: color.withAlpha(30), borderRadius: BorderRadius.circular(4), border: Border.all(color: color.withAlpha(120))),
+      decoration: BoxDecoration(color: color.withAlpha(20), borderRadius: BorderRadius.circular(4), border: Border.all(color: color.withAlpha(80))),
       child: Text(severity.toUpperCase(), style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
     );
   }
@@ -616,7 +656,7 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
         color = const Color(0xFF10B981);
         break;
       default:
-        color = const Color(0xFF94A3B8);
+        color = TexoraColors.textSecondary;
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -639,8 +679,8 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
           decoration: const BoxDecoration(
-            color: Color(0xFF0F172A),
-            border: Border(bottom: BorderSide(color: Color(0xFF1E293B))),
+            color: TexoraColors.cardBg,
+            border: Border(bottom: BorderSide(color: TexoraColors.cardBorder)),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -652,14 +692,14 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(inc.incidentCode, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                      Text('${inc.machineCode ?? "Machine"} • ${inc.departmentName.isNotEmpty ? inc.departmentName : inc.departmentCode}', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                      Text(inc.incidentCode, style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+                      Text('${inc.machineCode ?? "Machine"} • ${inc.departmentName.isNotEmpty ? inc.departmentName : inc.departmentCode}', style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 11)),
                     ],
                   ),
                 ],
               ),
               IconButton(
-                icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8)),
+                icon: const Icon(Icons.close_rounded, color: TexoraColors.textSecondary),
                 onPressed: _closeWorkspace,
                 tooltip: 'Close Workspace',
               ),
@@ -739,14 +779,14 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF131C31),
+        color: TexoraColors.workspaceBg,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFF1E293B)),
+        border: Border.all(color: TexoraColors.cardBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Autonomous Workflow Lifecycle', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+          const Text('Autonomous Workflow Lifecycle', style: TextStyle(color: TexoraColors.textPrimary, fontSize: 13, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
           Wrap(
             spacing: 8,
@@ -756,23 +796,23 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
               return Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: isCurrent ? const Color(0xFF0284C7).withAlpha(40) : const Color(0xFF0F172A),
+                  color: isCurrent ? TexoraColors.primaryLight : TexoraColors.cardBg,
                   borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: isCurrent ? const Color(0xFF38BDF8) : const Color(0xFF1E293B)),
+                  border: Border.all(color: isCurrent ? TexoraColors.primaryLightBorder : TexoraColors.cardBorder),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
                       isCurrent ? Icons.play_circle_fill_rounded : Icons.check_circle_outline_rounded,
-                      color: isCurrent ? const Color(0xFF38BDF8) : const Color(0xFF64748B),
+                      color: isCurrent ? TexoraColors.primaryBlue : TexoraColors.textMuted,
                       size: 14,
                     ),
                     const SizedBox(width: 6),
                     Text(
                       s['label']!,
                       style: TextStyle(
-                        color: isCurrent ? Colors.white : const Color(0xFF94A3B8),
+                        color: isCurrent ? TexoraColors.primaryBlue : TexoraColors.textSecondary,
                         fontSize: 11,
                         fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
                       ),
@@ -801,9 +841,9 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF131C31),
+        color: TexoraColors.workspaceBg,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFF1E293B)),
+        border: Border.all(color: TexoraColors.cardBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -811,11 +851,11 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Machine Operating State & Sensors', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+              const Text('Machine Operating State & Sensors', style: TextStyle(color: TexoraColors.textPrimary, fontSize: 13, fontWeight: FontWeight.bold)),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(color: const Color(0xFF10B981).withAlpha(30), borderRadius: BorderRadius.circular(4)),
-                child: const Text('TELEMETRY FRESH', style: TextStyle(color: Color(0xFF10B981), fontSize: 9, fontWeight: FontWeight.bold)),
+                decoration: BoxDecoration(color: TexoraColors.successBg, borderRadius: BorderRadius.circular(4), border: Border.all(color: TexoraColors.successBorder)),
+                child: const Text('TELEMETRY FRESH', style: TextStyle(color: TexoraColors.successText, fontSize: 9, fontWeight: FontWeight.bold)),
               ),
             ],
           ),
@@ -826,7 +866,7 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
               const SizedBox(width: 10),
               _buildSensorTile('Temperature', '$temp °C', 'Max: $maxTemp °C', const Color(0xFFF97316)),
               const SizedBox(width: 10),
-              _buildSensorTile('Speed RPM', '$speed rpm', 'Rated: 650 rpm', const Color(0xFF38BDF8)),
+              _buildSensorTile('Speed RPM', '$speed rpm', 'Rated: 650 rpm', TexoraColors.primaryBlue),
             ],
           ),
         ],
@@ -838,15 +878,15 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(color: const Color(0xFF0F172A), borderRadius: BorderRadius.circular(6), border: Border.all(color: const Color(0xFF1E293B))),
+        decoration: BoxDecoration(color: TexoraColors.cardBg, borderRadius: BorderRadius.circular(6), border: Border.all(color: TexoraColors.cardBorder)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10)),
+            Text(label, style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 10)),
             const SizedBox(height: 4),
             Text(value, style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.bold)),
             const SizedBox(height: 2),
-            Text(limit, style: const TextStyle(color: Color(0xFF64748B), fontSize: 9)),
+            Text(limit, style: const TextStyle(color: TexoraColors.textMuted, fontSize: 9)),
           ],
         ),
       ),
@@ -862,9 +902,9 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF131C31),
+        color: TexoraColors.workspaceBg,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFA855F7).withAlpha(100)),
+        border: Border.all(color: const Color(0xFFA855F7).withAlpha(60)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -880,7 +920,7 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
                     Expanded(
                       child: Text(
                         'AI Diagnostic Findings',
-                        style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                        style: TextStyle(color: TexoraColors.textPrimary, fontSize: 13, fontWeight: FontWeight.bold),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -890,15 +930,15 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
               const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(color: const Color(0xFFA855F7).withAlpha(30), borderRadius: BorderRadius.circular(4)),
-                child: Text(provider.toString().toUpperCase(), style: const TextStyle(color: Color(0xFFA855F7), fontSize: 10, fontWeight: FontWeight.bold)),
+                decoration: BoxDecoration(color: const Color(0xFFA855F7).withAlpha(20), borderRadius: BorderRadius.circular(4)),
+                child: Text(provider.toString().toUpperCase(), style: const TextStyle(color: Color(0xFF9333EA), fontSize: 10, fontWeight: FontWeight.bold)),
               ),
             ],
           ),
           const SizedBox(height: 10),
           Text(
-            rootCause.toString().isNotEmpty ? rootCause.toString() : 'Drive-side rolling element bearing degradation diagnosed.',
-            style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 12, height: 1.4),
+            rootCause.toString().isNotEmpty ? rootCause.toString() : 'Diagnostic investigation in progress by AI specialist fleet.',
+            style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 12, height: 1.4),
           ),
         ],
       ),
@@ -911,20 +951,26 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
     final prod = multiAgent?['production'] as Map<String, dynamic>?;
     final inv = multiAgent?['inventory'] as Map<String, dynamic>?;
 
-    final parts = (inv?['in_stock_parts'] as List?)?.join(', ') ?? 'SKF-22212-E Roller Bearing Kit';
-    final alternates = (prod?['eligible_alternates'] as List?)?.join(', ') ?? 'WEV-AJ-01, WEV-AJ-03';
+    final inStockList = inv?['in_stock_parts'] as List?;
+    final parts = (inStockList != null && inStockList.isNotEmpty)
+        ? inStockList.join(', ')
+        : 'No specific replacement parts allocated yet';
+    final altList = prod?['eligible_alternates'] as List?;
+    final alternates = (altList != null && altList.isNotEmpty)
+        ? altList.join(', ')
+        : 'No alternate machines designated';
 
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF131C31),
+        color: TexoraColors.workspaceBg,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFF1E293B)),
+        border: Border.all(color: TexoraColors.cardBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Operational Constraints & Multi-Agent Findings', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+          const Text('Operational Constraints & Multi-Agent Findings', style: TextStyle(color: TexoraColors.textPrimary, fontSize: 13, fontWeight: FontWeight.bold)),
           const SizedBox(height: 10),
           _buildInfoRow('Spare Parts Stock:', parts, Icons.inventory_2_outlined),
           const SizedBox(height: 6),
@@ -938,12 +984,12 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, color: const Color(0xFF38BDF8), size: 14),
+        Icon(icon, color: TexoraColors.primaryBlue, size: 14),
         const SizedBox(width: 8),
-        Text(label, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.w600)),
+        Text(label, style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w600)),
         const SizedBox(width: 6),
         Expanded(
-          child: Text(value, style: const TextStyle(color: Colors.white, fontSize: 11)),
+          child: Text(value, style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 11)),
         ),
       ],
     );
@@ -957,17 +1003,17 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF131C31),
+        color: TexoraColors.workspaceBg,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFF1E293B)),
+        border: Border.all(color: TexoraColors.cardBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Digital Twin Recovery Strategy Evaluation', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+          const Text('Digital Twin Recovery Strategy Evaluation', style: TextStyle(color: TexoraColors.textPrimary, fontSize: 13, fontWeight: FontWeight.bold)),
           const SizedBox(height: 10),
           if (strategies.isEmpty)
-            const Text('No strategy simulations recorded yet.', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11))
+            const Text('No strategy simulations recorded yet.', style: TextStyle(color: TexoraColors.textSecondary, fontSize: 11))
           else
             Column(
               children: strategies.map((s) {
@@ -981,9 +1027,9 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
                   margin: const EdgeInsets.only(bottom: 8),
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0F172A),
+                    color: TexoraColors.cardBg,
                     borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: rank == 1 ? const Color(0xFF10B981) : const Color(0xFF1E293B)),
+                    border: Border.all(color: rank == 1 ? TexoraColors.successText : TexoraColors.cardBorder),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -993,22 +1039,22 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
                         children: [
                           Row(
                             children: [
-                              Text(code, style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12)),
+                              Text(code, style: const TextStyle(color: TexoraColors.primaryBlue, fontWeight: FontWeight.bold, fontSize: 12)),
                               if (rank == 1) ...[
                                 const SizedBox(width: 8),
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(color: const Color(0xFF10B981).withAlpha(30), borderRadius: BorderRadius.circular(4)),
-                                  child: const Text('RECOMMENDED', style: TextStyle(color: Color(0xFF10B981), fontSize: 9, fontWeight: FontWeight.bold)),
+                                  decoration: BoxDecoration(color: TexoraColors.successBg, borderRadius: BorderRadius.circular(4)),
+                                  child: const Text('RECOMMENDED', style: TextStyle(color: TexoraColors.successText, fontSize: 9, fontWeight: FontWeight.bold)),
                                 ),
                               ],
                             ],
                           ),
                           const SizedBox(height: 2),
-                          Text(name, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10)),
+                          Text(name, style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 10)),
                         ],
                       ),
-                      Text('Est: $hours hrs', style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600)),
+                      Text('Est: $hours hrs', style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 11, fontWeight: FontWeight.w600)),
                     ],
                   ),
                 );
@@ -1026,9 +1072,9 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF131C31),
+        color: TexoraColors.workspaceBg,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFF2563EB).withAlpha(120)),
+        border: Border.all(color: TexoraColors.primaryLightBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1036,18 +1082,18 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Manager Governance & Approvals', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+              const Text('Manager Governance & Approvals', style: TextStyle(color: TexoraColors.textPrimary, fontSize: 13, fontWeight: FontWeight.bold)),
               if (pending.isNotEmpty)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(color: const Color(0xFFEF4444).withAlpha(30), borderRadius: BorderRadius.circular(4)),
-                  child: Text('${pending.length} ACTION REQUIRED', style: const TextStyle(color: Color(0xFFEF4444), fontSize: 9, fontWeight: FontWeight.bold)),
+                  decoration: BoxDecoration(color: TexoraColors.criticalBg, borderRadius: BorderRadius.circular(4)),
+                  child: Text('${pending.length} ACTION REQUIRED', style: const TextStyle(color: TexoraColors.criticalText, fontSize: 9, fontWeight: FontWeight.bold)),
                 ),
             ],
           ),
           const SizedBox(height: 10),
           if (pending.isEmpty)
-            const Text('No pending authorization requests for this incident.', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11))
+            const Text('No pending authorization requests for this incident.', style: TextStyle(color: TexoraColors.textSecondary, fontSize: 11))
           else
             ElevatedButton.icon(
               onPressed: () {
@@ -1058,7 +1104,7 @@ class _IncidentIntelligenceScreenState extends State<IncidentIntelligenceScreen>
               icon: const Icon(Icons.gavel_rounded, size: 14),
               label: const Text('Review & Authorize in Approval Center ➔', style: TextStyle(fontSize: 11)),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2563EB),
+                backgroundColor: TexoraColors.primaryBlue,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),

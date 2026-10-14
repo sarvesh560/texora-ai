@@ -347,7 +347,7 @@ class _WhatIfSimulationScreenState extends State<WhatIfSimulationScreen> {
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                const Text('EXPO DEMOS:', style: TextStyle(color: Color(0xFF64748B), fontSize: 11, fontWeight: FontWeight.bold)),
+                const Text('BENCHMARK SCENARIOS:', style: TextStyle(color: Color(0xFF64748B), fontSize: 11, fontWeight: FontWeight.bold)),
                 const SizedBox(width: 8),
                 if (_demoScenarios.isNotEmpty)
                   ..._demoScenarios.map((demo) {

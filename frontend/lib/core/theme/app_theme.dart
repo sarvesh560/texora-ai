@@ -1,41 +1,37 @@
 import 'package:flutter/material.dart';
-import '../constants/app_colors.dart';
+import 'texora_design_system.dart';
 
 class AppTheme {
   static ThemeData get lightTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
-      scaffoldBackgroundColor: AppColors.background,
+      scaffoldBackgroundColor: TexoraColors.workspaceBg,
       colorScheme: const ColorScheme.light(
-        primary: AppColors.primaryBlue,
+        primary: TexoraColors.primaryBlue,
         onPrimary: Colors.white,
-        surface: AppColors.surface,
-        onSurface: AppColors.textPrimary,
-        error: AppColors.errorRed,
+        surface: TexoraColors.cardBg,
+        onSurface: TexoraColors.textPrimary,
+        error: TexoraColors.critical,
         onError: Colors.white,
       ),
       appBarTheme: const AppBarTheme(
-        backgroundColor: AppColors.surface,
+        backgroundColor: TexoraColors.headerBg,
         elevation: 0,
         scrolledUnderElevation: 0,
-        titleTextStyle: TextStyle(
-          color: AppColors.textPrimary,
-          fontSize: 18,
-          fontWeight: FontWeight.w600,
-        ),
-        iconTheme: IconThemeData(color: AppColors.textPrimary),
+        titleTextStyle: TexoraTypography.screenTitle,
+        iconTheme: IconThemeData(color: TexoraColors.textPrimary),
       ),
       cardTheme: CardThemeData(
-        color: AppColors.surface,
+        color: TexoraColors.cardBg,
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-          side: const BorderSide(color: AppColors.border, width: 1),
+          borderRadius: BorderRadius.circular(TexoraSpacing.radiusLg),
+          side: const BorderSide(color: TexoraColors.cardBorder, width: 1),
         ),
       ),
       dividerTheme: const DividerThemeData(
-        color: AppColors.border,
+        color: TexoraColors.cardBorder,
         thickness: 1,
         space: 1,
       ),
@@ -43,41 +39,42 @@ class AppTheme {
         headlineLarge: TextStyle(
           fontSize: 26,
           fontWeight: FontWeight.w700,
-          color: AppColors.textPrimary,
+          color: TexoraColors.textPrimary,
           letterSpacing: -0.5,
         ),
         headlineMedium: TextStyle(
           fontSize: 20,
           fontWeight: FontWeight.w600,
-          color: AppColors.textPrimary,
+          color: TexoraColors.textPrimary,
         ),
         titleLarge: TextStyle(
           fontSize: 16,
           fontWeight: FontWeight.w600,
-          color: AppColors.textPrimary,
+          color: TexoraColors.textPrimary,
         ),
         titleMedium: TextStyle(
           fontSize: 14,
           fontWeight: FontWeight.w500,
-          color: AppColors.textPrimary,
+          color: TexoraColors.textPrimary,
         ),
         bodyLarge: TextStyle(
           fontSize: 14,
           fontWeight: FontWeight.w400,
-          color: AppColors.textPrimary,
+          color: TexoraColors.textPrimary,
         ),
         bodyMedium: TextStyle(
           fontSize: 13,
           fontWeight: FontWeight.w400,
-          color: AppColors.textSecondary,
+          color: TexoraColors.textSecondary,
         ),
         labelSmall: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w600,
-          color: AppColors.textMuted,
+          color: TexoraColors.textMuted,
           letterSpacing: 0.5,
         ),
       ),
     );
   }
 }
+

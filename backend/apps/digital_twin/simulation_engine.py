@@ -119,6 +119,14 @@ class WhatIfSimulationEngine:
                 total_cap = sum(float(m.get("rated_capacity_units_per_hour", 50.0)) for m in dept_machines)
                 baseline_capacity_per_hour[dept_code] = round(total_cap, 2)
 
+            # Ensure all department codes in baseline snapshot are included
+            for m in baseline_machines.values():
+                d_code = m.get("department_code")
+                if d_code and d_code not in baseline_capacity_per_hour:
+                    dept_machines = [bm for bm in baseline_machines.values() if bm.get("department_code") == d_code]
+                    total_cap = sum(float(bm.get("rated_capacity_units_per_hour", 50.0)) for bm in dept_machines)
+                    baseline_capacity_per_hour[d_code] = round(total_cap, 2)
+
             # 4. Apply hypothetical changes
             machine_changes = list(scenario.machine_changes.all())
             target_failed_codes = [mc.machine_code for mc in machine_changes]
@@ -148,8 +156,9 @@ class WhatIfSimulationEngine:
                 unit = cls.DEPARTMENT_UNITS.get(dept_code, "METERS")
 
                 loss_per_hour = rated_cap * (cap_reduction_pct / 100.0)
+                current_cap = simulated_capacity_per_hour.get(dept_code, rated_cap)
                 simulated_capacity_per_hour[dept_code] = max(
-                    0.0, round(simulated_capacity_per_hour[dept_code] - loss_per_hour, 2)
+                    0.0, round(current_cap - loss_per_hour, 2)
                 )
 
                 # Total loss over failure duration

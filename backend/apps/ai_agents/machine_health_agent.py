@@ -136,10 +136,17 @@ class MachineHealthAgent:
             agent_def.save(update_fields=["model_name"])
         return agent_def
 
-    def investigate_incident(self, incident_id: int) -> Dict[str, Any]:
+    def investigate_incident(self, incident_id: int, force_provider: Optional[str] = None) -> Dict[str, Any]:
         """
         Executes a complete end-to-end investigation for a specific factory incident.
         """
+        if force_provider:
+            self.provider = get_llm_provider(force_provider)
+            if getattr(self.provider, "model_name", None):
+                AgentDefinition.objects.filter(agent_type=AgentType.MACHINE_HEALTH).update(
+                    model_name=self.provider.model_name
+                )
+
         incident = FactoryIncident.objects.select_related("machine", "department", "factory").filter(id=incident_id).first()
         if not incident:
             return {"success": False, "error": f"Incident #{incident_id} not found."}
@@ -179,8 +186,6 @@ class MachineHealthAgent:
         try:
             # 2. Gather Evidence using approved tools
             evidence = self._gather_evidence(machine)
-            execution.context_payload = evidence
-            execution.save(update_fields=["context_payload"])
 
             # 3. Assemble LLM Prompt
             user_prompt = self._build_user_prompt(incident, machine, evidence)
@@ -195,31 +200,65 @@ class MachineHealthAgent:
             execution.latency_ms = llm_response.latency_ms
             execution.token_count = llm_response.token_count
 
-            # 4. Handle LLM Response & Fallbacks with exact provenance
-            provenance = "GEMINI_SUCCESS"
-            if llm_response.status == "SUCCESS" and llm_response.structured_json:
-                result_json = llm_response.structured_json
-                provenance = "GEMINI_SUCCESS" if getattr(llm_response, "provider", "") == "gemini" else "MOCK_AI_SUCCESS"
-            else:
-                if llm_response.status == "RATE_LIMITED":
-                    provenance = "GEMINI_RATE_LIMITED"
-                    logger.warning("[MachineHealthAgent] Gemini rate limited (429). Generating deterministic fallback diagnosis.")
-                elif llm_response.status == "UNCONFIGURED":
-                    provenance = "GEMINI_UNCONFIGURED"
-                    logger.info("[MachineHealthAgent] Gemini unconfigured. Generating deterministic fallback diagnosis.")
-                else:
-                    provenance = "GEMINI_FAILED"
-                    logger.warning("[MachineHealthAgent] Gemini inference error (%s). Generating deterministic fallback diagnosis.", llm_response.error_message)
+            from apps.ai_agents.schemas import (
+                validate_machine_health_output,
+                build_metadata_envelope,
+                PROVENANCE_GROQ_LIVE,
+                PROVENANCE_GEMINI_LIVE,
+                PROVENANCE_DETERMINISTIC_FALLBACK,
+                PROVENANCE_MOCK_SUCCESS,
+                PROVENANCE_PROVIDER_RATE_LIMITED,
+                PROVENANCE_PROVIDER_UNAVAILABLE,
+            )
 
-                result_json = self._generate_deterministic_diagnosis(incident, machine, evidence, provenance)
+            if llm_response.status == "SUCCESS" and llm_response.structured_json:
+                result_json = validate_machine_health_output(llm_response.structured_json, incident.id, machine.code)
+                prov = getattr(llm_response, "provider", "")
+                if prov == "groq" or getattr(llm_response, "reasoning_source", "") == PROVENANCE_GROQ_LIVE:
+                    reasoning_source = PROVENANCE_GROQ_LIVE
+                elif prov == "gemini" or getattr(llm_response, "reasoning_source", "") == PROVENANCE_GEMINI_LIVE:
+                    reasoning_source = PROVENANCE_GEMINI_LIVE
+                elif prov == "mock":
+                    reasoning_source = PROVENANCE_MOCK_SUCCESS
+                else:
+                    reasoning_source = getattr(llm_response, "reasoning_source", PROVENANCE_GROQ_LIVE)
+                provider_attempt_status = llm_response.provider_attempt_status or reasoning_source
+            else:
+                provider_attempt_status = llm_response.provider_attempt_status or PROVENANCE_DETERMINISTIC_FALLBACK
+                reasoning_source = PROVENANCE_DETERMINISTIC_FALLBACK
+                logger.info(
+                    "[MachineHealthAgent] Provider status '%s' (%s). Using deterministic industrial fallback.",
+                    provider_attempt_status,
+                    llm_response.error_message[:100],
+                )
+                result_json = self._generate_deterministic_diagnosis(incident, machine, evidence, provider_attempt_status)
 
             # 5. Process and Validate Structured Decisions
-            decision_obj = self._persist_decision_and_actions(execution, incident, machine, result_json, provenance)
+            decision_obj = self._persist_decision_and_actions(execution, incident, machine, result_json, reasoning_source)
 
-            # 6. Update Execution Status
+            # 6. Store uniform metadata envelope in context_payload
+            envelope = build_metadata_envelope(
+                agent_name=agent_def.name,
+                incident_id=incident.id,
+                machine_code=machine.code,
+                model_name=getattr(llm_response, "model", getattr(self.provider, "model_name", "qwen/qwen3.8-27b")),
+                provider_attempt_status=provider_attempt_status,
+                reasoning_source=reasoning_source,
+                latency_ms=execution.latency_ms,
+                token_count=execution.token_count,
+                execution_errors=llm_response.error_message,
+                input_context=evidence,
+                structured_output=result_json,
+                provider_name=getattr(llm_response, "provider", "groq"),
+            )
+            # Retain legacy root keys for backward compatibility
+            envelope.update(evidence)
+            execution.context_payload = envelope
+
+            # 7. Update Execution Status
             execution.status = AgentExecutionStatus.COMPLETED
             execution.execution_summary = (
-                f"[{provenance}] Completed investigation for {machine.code}. "
+                f"[{reasoning_source} / {provider_attempt_status}] Completed investigation for {machine.code}. "
                 f"Assessed Severity: {result_json.get('severity_assessment', 'UNKNOWN')}. "
                 f"Hypothesis: {incident.root_cause_hypothesis[:120]}"
             )
@@ -233,8 +272,10 @@ class MachineHealthAgent:
                 "machine_code": machine.code,
                 "decision_id": decision_obj.id if decision_obj else None,
                 "findings": result_json,
-                "provenance": provenance,
-                "is_live_gemini": provenance == "GEMINI_SUCCESS",
+                "provenance": reasoning_source,
+                "reasoning_source": reasoning_source,
+                "provider_attempt_status": provider_attempt_status,
+                "is_live_gemini": reasoning_source == PROVENANCE_GEMINI_LIVE,
                 "latency_ms": execution.latency_ms,
                 "token_count": execution.token_count,
             }

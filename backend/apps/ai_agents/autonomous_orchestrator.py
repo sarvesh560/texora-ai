@@ -47,6 +47,7 @@ from apps.digital_twin.models import (
     RecoveryStrategyEvaluation,
 )
 from apps.maintenance.models import MaintenanceTicket, TicketPriority, TicketStatus
+from apps.maintenance.lifecycle_service import WorkOrderLifecycleService
 
 logger = logging.getLogger(__name__)
 
@@ -159,7 +160,7 @@ class AutonomousFactoryOrchestrator:
             )
 
             orch_res = self.recovery_orchestrator.orchestrate_incident_recovery(
-                incident_id=incident_id, force_reanalyze=force_reanalyze
+                incident_id=incident_id, force_reanalyze=force_reanalyze, force_provider=force_provider
             )
 
             recovery_case_id = orch_res.get("case_id")
@@ -276,6 +277,7 @@ class AutonomousFactoryOrchestrator:
             # -------------------------------------------------------------
             approval = ApprovalRequest.objects.filter(
                 incident=incident,
+                requested_by_agent="Autonomous Factory Orchestrator",
                 status=ApprovalStatus.PENDING,
             ).first()
 
@@ -454,6 +456,7 @@ class AutonomousFactoryOrchestrator:
                 labor_hours=Decimal("2.50"),
                 created_by_agent="AutonomousFactoryOrchestrator",
             )
+            WorkOrderLifecycleService.populate_checklist_if_empty(ticket)
 
             # Update RecoveryCase
             if not recovery_case and workflow_run:

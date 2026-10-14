@@ -178,6 +178,17 @@ class MaintenanceTicketViewSet(viewsets.ModelViewSet):
         notes = request.data.get("notes", "")
         actor = request.data.get("actor", "Field Technician")
 
+        if ticket.status in [TicketStatus.AWAITING_VERIFICATION, TicketStatus.VERIFIED, TicketStatus.CLOSED]:
+            return Response(
+                {
+                    "error": (
+                        f"Diagnostic inspection already completed: Work order {ticket.ticket_number} "
+                        f"is currently in state '{ticket.status}'."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         if not confirmed_fault:
             return Response({"error": "confirmed_fault is required to confirm diagnostic inspection."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -209,6 +220,17 @@ class MaintenanceTicketViewSet(viewsets.ModelViewSet):
         parts = request.data.get("parts", [])
         actor = request.data.get("actor", "Field Technician")
 
+        if ticket.status in [TicketStatus.AWAITING_VERIFICATION, TicketStatus.VERIFIED, TicketStatus.CLOSED]:
+            return Response(
+                {
+                    "error": (
+                        f"Cannot deduct spare parts: Physical repair is already completed for "
+                        f"work order {ticket.ticket_number} (current state: '{ticket.status}')."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         if not parts:
             return Response({"error": "parts list is required."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -239,6 +261,28 @@ class MaintenanceTicketViewSet(viewsets.ModelViewSet):
         remaining_issues = request.data.get("remaining_issues", "")
         actor = request.data.get("actor", "Field Technician")
 
+        # State-aware guard: prevent repeated repair completion from AWAITING_VERIFICATION or terminal states
+        if ticket.status == TicketStatus.AWAITING_VERIFICATION:
+            return Response(
+                {
+                    "error": (
+                        f"Physical repair has already been completed for work order {ticket.ticket_number}. "
+                        f"The ticket is currently in 'AWAITING_VERIFICATION' and awaiting post-repair recovery verification."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if ticket.status in [TicketStatus.VERIFIED, TicketStatus.CLOSED, TicketStatus.RESOLVED]:
+            return Response(
+                {
+                    "error": (
+                        f"Action unavailable: Work order {ticket.ticket_number} has already been "
+                        f"verified and closed ({ticket.status})."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         if not repair_performed or len(repair_performed.strip()) < 10:
             return Response(
                 {"error": "Please describe the repair performed (minimum 10 characters)."},
@@ -251,17 +295,31 @@ class MaintenanceTicketViewSet(viewsets.ModelViewSet):
             )
 
         try:
-            updated_ticket = WorkOrderLifecycleService.transition_state(
-                ticket=ticket,
-                new_state=TicketStatus.REPAIR_COMPLETED,
-                actor=actor,
-                reason="Technician finished repair; documented work and duration.",
-                payload={
-                    "repair_performed": repair_performed,
-                    "actual_repair_duration_minutes": duration,
-                    "remaining_issues": remaining_issues,
-                },
-            )
+            if ticket.status == TicketStatus.REPAIR_COMPLETED:
+                updated_ticket = WorkOrderLifecycleService.transition_state(
+                    ticket=ticket,
+                    new_state=TicketStatus.AWAITING_VERIFICATION,
+                    actor=actor,
+                    reason="Moving to awaiting verification following repair completion.",
+                )
+            else:
+                updated_ticket = WorkOrderLifecycleService.transition_state(
+                    ticket=ticket,
+                    new_state=TicketStatus.REPAIR_COMPLETED,
+                    actor=actor,
+                    reason="Technician finished repair; documented work and duration.",
+                    payload={
+                        "repair_performed": repair_performed,
+                        "actual_repair_duration_minutes": duration,
+                        "remaining_issues": remaining_issues,
+                    },
+                )
+                updated_ticket = WorkOrderLifecycleService.transition_state(
+                    ticket=updated_ticket,
+                    new_state=TicketStatus.AWAITING_VERIFICATION,
+                    actor=actor,
+                    reason="Work order ready for post-repair sensor verification.",
+                )
             return Response(MaintenanceTicketSerializer(updated_ticket).data)
         except ValidationError as e:
             return Response({"error": str(e.detail if hasattr(e, "detail") else e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -364,6 +422,8 @@ class MaintenanceTicketViewSet(viewsets.ModelViewSet):
                 actor=actor,
             )
             return Response(result)
+        except ValidationError as e:
+            return Response({"error": str(e.detail if hasattr(e, "detail") else e)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 

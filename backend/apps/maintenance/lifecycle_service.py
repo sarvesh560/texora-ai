@@ -410,6 +410,15 @@ class WorkOrderLifecycleService:
             p.get("item_code"): p for p in (ticket.parts_replaced or []) if p.get("deducted")
         }
 
+        # Guard against deducting new spare parts once repair is completed/in verification/closed
+        if ticket.status in [TicketStatus.AWAITING_VERIFICATION, TicketStatus.VERIFIED, TicketStatus.CLOSED]:
+            unconsumed = [p for p in parts if p.get("item_code") not in already_consumed]
+            if unconsumed:
+                raise ValidationError(
+                    f"Cannot consume spare parts: Work order {ticket.ticket_number} is in '{ticket.status}'. "
+                    f"Parts can only be allocated during active repair."
+                )
+
         for part in parts:
             item_code = part.get("item_code")
             qty = Decimal(str(part.get("quantity", 1)))

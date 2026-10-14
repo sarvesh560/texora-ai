@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
-import '../../core/constants/app_colors.dart';
+import '../../core/theme/texora_design_system.dart';
 import '../../data/services/api_service.dart';
 
 class ApprovalCenterScreen extends StatefulWidget {
   final Function(int, {String? targetMachine})? onNavigate;
+  final VoidCallback? onClose;
 
-  const ApprovalCenterScreen({super.key, this.onNavigate});
+  const ApprovalCenterScreen({super.key, this.onNavigate, this.onClose});
 
   @override
   State<ApprovalCenterScreen> createState() => _ApprovalCenterScreenState();
@@ -101,26 +102,27 @@ class _ApprovalCenterScreenState extends State<ApprovalCenterScreen> {
         return StatefulBuilder(
           builder: (dialogCtx, setDialogState) {
             return AlertDialog(
-              backgroundColor: const Color(0xFF1E293B),
+              backgroundColor: TexoraColors.cardBg,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
-                side: const BorderSide(color: Color(0xFF334155)),
+                side: const BorderSide(color: TexoraColors.cardBorder),
               ),
               title: Row(
                 children: [
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: AppColors.successGreen.withAlpha(40),
+                      color: TexoraColors.successBg,
                       borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: TexoraColors.successBorder),
                     ),
-                    child: const Icon(Icons.verified_user_rounded, color: AppColors.successGreen, size: 22),
+                    child: const Icon(Icons.verified_user_rounded, color: TexoraColors.successText, size: 22),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
                       'Authorize AI Action [$code]',
-                      style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700),
+                      style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w700),
                     ),
                   ),
                 ],
@@ -135,21 +137,21 @@ class _ApprovalCenterScreenState extends State<ApprovalCenterScreen> {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF0F172A),
+                          color: TexoraColors.workspaceBg,
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: AppColors.successGreen.withAlpha(60)),
+                          border: Border.all(color: TexoraColors.cardBorder),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Text(
                               'TARGET OPERATIONAL ACTION:',
-                              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10, fontWeight: FontWeight.w700),
+                              style: TextStyle(color: TexoraColors.textMuted, fontSize: 10, fontWeight: FontWeight.w700),
                             ),
                             const SizedBox(height: 4),
                             Text(
                               action,
-                              style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                              style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600),
                             ),
                           ],
                         ),
@@ -157,42 +159,42 @@ class _ApprovalCenterScreenState extends State<ApprovalCenterScreen> {
                       const SizedBox(height: 14),
                       const Text(
                         'Server-side authorization will execute the requested recovery strategy via ActionSafetyService and create an immutable audit record.',
-                        style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12, height: 1.4),
+                        style: TextStyle(color: TexoraColors.textSecondary, fontSize: 12, height: 1.4),
                       ),
                       const SizedBox(height: 14),
                       const Text(
                         'Authorizing Manager / Role:',
-                        style: TextStyle(color: Color(0xFFCBD5E1), fontSize: 12, fontWeight: FontWeight.w600),
+                        style: TextStyle(color: TexoraColors.textPrimary, fontSize: 12, fontWeight: FontWeight.w600),
                       ),
                       const SizedBox(height: 6),
                       TextField(
                         controller: nameController,
-                        style: const TextStyle(color: Colors.white, fontSize: 13),
+                        style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 13),
                         decoration: InputDecoration(
                           hintText: 'e.g. Chief Operations Officer',
-                          hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                          hintStyle: const TextStyle(color: TexoraColors.textMuted, fontSize: 12),
                           filled: true,
-                          fillColor: const Color(0xFF0F172A),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF334155))),
+                          fillColor: TexoraColors.inputBg,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: TexoraColors.cardBorder)),
                           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                         ),
                       ),
                       const SizedBox(height: 12),
                       const Text(
                         'Authorization Notes:',
-                        style: TextStyle(color: Color(0xFFCBD5E1), fontSize: 12, fontWeight: FontWeight.w600),
+                        style: TextStyle(color: TexoraColors.textPrimary, fontSize: 12, fontWeight: FontWeight.w600),
                       ),
                       const SizedBox(height: 6),
                       TextField(
                         controller: notesController,
                         maxLines: 2,
-                        style: const TextStyle(color: Colors.white, fontSize: 13),
+                        style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 13),
                         decoration: InputDecoration(
                           hintText: 'Enter justification or operational remarks...',
-                          hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                          hintStyle: const TextStyle(color: TexoraColors.textMuted, fontSize: 12),
                           filled: true,
-                          fillColor: const Color(0xFF0F172A),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF334155))),
+                          fillColor: TexoraColors.inputBg,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: TexoraColors.cardBorder)),
                           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                         ),
                       ),
@@ -203,7 +205,7 @@ class _ApprovalCenterScreenState extends State<ApprovalCenterScreen> {
               actions: [
                 TextButton(
                   onPressed: isSubmitting ? null : () => Navigator.of(ctx).pop(),
-                  child: const Text('Cancel', style: TextStyle(color: Color(0xFF94A3B8))),
+                  child: const Text('Cancel', style: TextStyle(color: TexoraColors.textMuted)),
                 ),
                 ElevatedButton.icon(
                   onPressed: isSubmitting
@@ -219,12 +221,12 @@ class _ApprovalCenterScreenState extends State<ApprovalCenterScreen> {
                           if (ctx.mounted) {
                             Navigator.of(ctx).pop();
                           }
-                          if (resp['success'] == false) {
+                          if (resp['error'] != null) {
                             if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
-                                  content: Text('Approval Failed: ${resp['error'] ?? 'Unknown error'}'),
-                                  backgroundColor: AppColors.errorRed,
+                                  content: Text('Approval Failed: ${resp['error']}'),
+                                  backgroundColor: TexoraColors.critical,
                                 ),
                               );
                             }
@@ -232,8 +234,8 @@ class _ApprovalCenterScreenState extends State<ApprovalCenterScreen> {
                             if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text('Action Authorized & Dispatched to Factory Controllers successfully.'),
-                                  backgroundColor: AppColors.successGreen,
+                                  content: Text('Action Authorized successfully. Autonomous execution pipeline triggered.'),
+                                  backgroundColor: TexoraColors.success,
                                 ),
                               );
                               _loadApprovals();
@@ -241,9 +243,8 @@ class _ApprovalCenterScreenState extends State<ApprovalCenterScreen> {
                           }
                         },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.successGreen,
+                    backgroundColor: TexoraColors.success,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                   ),
                   icon: isSubmitting
                       ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
@@ -260,10 +261,8 @@ class _ApprovalCenterScreenState extends State<ApprovalCenterScreen> {
 
   void _showRevisionDialog(Map<String, dynamic> approval) {
     final code = approval['approval_code'] ?? 'APR-${approval['id']}';
-    final TextEditingController roleController = TextEditingController(text: 'Factory Operations Director');
-    final TextEditingController notesController = TextEditingController(
-      text: 'Re-simulate Strategy B with lower speed constraint on alternate loom.',
-    );
+    final TextEditingController nameController = TextEditingController(text: 'Shift Supervisor');
+    final TextEditingController notesController = TextEditingController(text: 'Requesting alternative line reassignment with lower maintenance downtime.');
     bool isSubmitting = false;
 
     showDialog(
@@ -273,82 +272,87 @@ class _ApprovalCenterScreenState extends State<ApprovalCenterScreen> {
         return StatefulBuilder(
           builder: (dialogCtx, setDialogState) {
             return AlertDialog(
-              backgroundColor: const Color(0xFF1E293B),
+              backgroundColor: TexoraColors.cardBg,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
-                side: const BorderSide(color: Color(0xFF334155)),
+                side: const BorderSide(color: TexoraColors.cardBorder),
               ),
               title: Row(
                 children: [
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF59E0B).withAlpha(40),
+                      color: TexoraColors.warningBg,
                       borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: TexoraColors.warningBorder),
                     ),
-                    child: const Icon(Icons.history_edu_rounded, color: Color(0xFFF59E0B), size: 22),
+                    child: const Icon(Icons.history_edu_rounded, color: TexoraColors.warningText, size: 22),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Request Revision [$code]',
-                      style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700),
+                      'Request Strategy Revision [$code]',
+                      style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w700),
                     ),
                   ),
                 ],
               ),
               content: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 500),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Return recommendation to autonomous agents for alternative simulation or parameter adjustment.',
-                      style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12, height: 1.4),
-                    ),
-                    const SizedBox(height: 14),
-                    const Text(
-                      'Requesting Authority:',
-                      style: TextStyle(color: Color(0xFFCBD5E1), fontSize: 12, fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 6),
-                    TextField(
-                      controller: roleController,
-                      style: const TextStyle(color: Colors.white, fontSize: 13),
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: const Color(0xFF0F172A),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Requesting revision returns this gate to the AI Recovery Orchestrator with human operator feedback to regenerate an updated proposal.',
+                        style: TextStyle(color: TexoraColors.textSecondary, fontSize: 12, height: 1.4),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'Revision Instructions / Reason:',
-                      style: TextStyle(color: Color(0xFFCBD5E1), fontSize: 12, fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 6),
-                    TextField(
-                      controller: notesController,
-                      maxLines: 3,
-                      style: const TextStyle(color: Colors.white, fontSize: 13),
-                      decoration: InputDecoration(
-                        hintText: 'Specify what agents need to adjust...',
-                        hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
-                        filled: true,
-                        fillColor: const Color(0xFF0F172A),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      const SizedBox(height: 14),
+                      const Text(
+                        'Reviewing Manager / Engineer:',
+                        style: TextStyle(color: TexoraColors.textPrimary, fontSize: 12, fontWeight: FontWeight.w600),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 6),
+                      TextField(
+                        controller: nameController,
+                        style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 13),
+                        decoration: InputDecoration(
+                          hintText: 'e.g. Lead Maintenance Engineer',
+                          hintStyle: const TextStyle(color: TexoraColors.textMuted, fontSize: 12),
+                          filled: true,
+                          fillColor: TexoraColors.inputBg,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: TexoraColors.cardBorder)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Revision Instructions for AI Agents:',
+                        style: TextStyle(color: TexoraColors.textPrimary, fontSize: 12, fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 6),
+                      TextField(
+                        controller: notesController,
+                        maxLines: 3,
+                        style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 13),
+                        decoration: InputDecoration(
+                          hintText: 'Specify parameter constraints, alternative machines, or parts...',
+                          hintStyle: const TextStyle(color: TexoraColors.textMuted, fontSize: 12),
+                          filled: true,
+                          fillColor: TexoraColors.inputBg,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: TexoraColors.cardBorder)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               actions: [
                 TextButton(
                   onPressed: isSubmitting ? null : () => Navigator.of(ctx).pop(),
-                  child: const Text('Cancel', style: TextStyle(color: Color(0xFF94A3B8))),
+                  child: const Text('Cancel', style: TextStyle(color: TexoraColors.textMuted)),
                 ),
                 ElevatedButton.icon(
                   onPressed: isSubmitting
@@ -356,41 +360,35 @@ class _ApprovalCenterScreenState extends State<ApprovalCenterScreen> {
                       : () async {
                           setDialogState(() => isSubmitting = true);
                           final approvalId = approval['id'] as int;
-                          final ok = await _apiService.requestApprovalRevision(
+                          final resp = await _apiService.requestRevisionApprovalRequest(
                             approvalId,
-                            notes: notesController.text.trim(),
-                            requestedBy: roleController.text.trim(),
+                            reviewedBy: nameController.text.trim(),
+                            revisionNotes: notesController.text.trim(),
                           );
                           if (ctx.mounted) Navigator.of(ctx).pop();
-                          if (ok) {
+                          if (resp['error'] != null) {
                             if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Revision request submitted to AI Orchestrator.'),
-                                  backgroundColor: Color(0xFFF59E0B),
-                                ),
+                                SnackBar(content: Text('Revision Failed: ${resp['error']}'), backgroundColor: TexoraColors.critical),
                               );
-                              _loadApprovals();
                             }
                           } else {
                             if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Failed to submit revision request.'),
-                                  backgroundColor: AppColors.errorRed,
-                                ),
+                                const SnackBar(content: Text('Revision request submitted to AI Orchestrator.'), backgroundColor: TexoraColors.info),
                               );
+                              _loadApprovals();
                             }
                           }
                         },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFF59E0B),
-                    foregroundColor: Colors.black,
+                    backgroundColor: TexoraColors.warning,
+                    foregroundColor: Colors.white,
                   ),
                   icon: isSubmitting
-                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-                      : const Icon(Icons.send_rounded, size: 16),
-                  label: Text(isSubmitting ? 'Submitting...' : 'Submit Revision'),
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.rate_review_rounded, size: 16),
+                  label: Text(isSubmitting ? 'Submitting...' : 'Submit Revision Request'),
                 ),
               ],
             );
@@ -402,10 +400,8 @@ class _ApprovalCenterScreenState extends State<ApprovalCenterScreen> {
 
   void _showRejectDialog(Map<String, dynamic> approval) {
     final code = approval['approval_code'] ?? 'APR-${approval['id']}';
-    final TextEditingController roleController = TextEditingController(text: 'Factory Operations Director');
-    final TextEditingController notesController = TextEditingController(
-      text: 'Rejected: Production schedule does not permit line stoppage at this time.',
-    );
+    final TextEditingController nameController = TextEditingController(text: 'Plant Manager');
+    final TextEditingController notesController = TextEditingController(text: 'Rejected: Line intervention deemed unnecessary during current shift schedule.');
     bool isSubmitting = false;
 
     showDialog(
@@ -415,82 +411,87 @@ class _ApprovalCenterScreenState extends State<ApprovalCenterScreen> {
         return StatefulBuilder(
           builder: (dialogCtx, setDialogState) {
             return AlertDialog(
-              backgroundColor: const Color(0xFF1E293B),
+              backgroundColor: TexoraColors.cardBg,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
-                side: const BorderSide(color: Color(0xFF334155)),
+                side: const BorderSide(color: TexoraColors.cardBorder),
               ),
               title: Row(
                 children: [
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: AppColors.errorRed.withAlpha(40),
+                      color: TexoraColors.criticalBg,
                       borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: TexoraColors.criticalBorder),
                     ),
-                    child: const Icon(Icons.cancel_outlined, color: AppColors.errorRed, size: 22),
+                    child: const Icon(Icons.block_rounded, color: TexoraColors.criticalText, size: 22),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Reject Action Request [$code]',
-                      style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700),
+                      'Reject AI Proposal [$code]',
+                      style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w700),
                     ),
                   ),
                 ],
               ),
               content: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 500),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Rejecting this request aborts the autonomous action execution and notifies the incident response team.',
-                      style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12, height: 1.4),
-                    ),
-                    const SizedBox(height: 14),
-                    const Text(
-                      'Deciding Authority:',
-                      style: TextStyle(color: Color(0xFFCBD5E1), fontSize: 12, fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 6),
-                    TextField(
-                      controller: roleController,
-                      style: const TextStyle(color: Colors.white, fontSize: 13),
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: const Color(0xFF0F172A),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Rejecting this proposal halts autonomous execution of the mitigation strategy. An immutable incident audit log entry will record this human override.',
+                        style: TextStyle(color: TexoraColors.textSecondary, fontSize: 12, height: 1.4),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'Mandatory Rejection Rationale:',
-                      style: TextStyle(color: Color(0xFFCBD5E1), fontSize: 12, fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 6),
-                    TextField(
-                      controller: notesController,
-                      maxLines: 3,
-                      style: const TextStyle(color: Colors.white, fontSize: 13),
-                      decoration: InputDecoration(
-                        hintText: 'State explicit operational reason...',
-                        hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
-                        filled: true,
-                        fillColor: const Color(0xFF0F172A),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      const SizedBox(height: 14),
+                      const Text(
+                        'Rejecting Authority:',
+                        style: TextStyle(color: TexoraColors.textPrimary, fontSize: 12, fontWeight: FontWeight.w600),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 6),
+                      TextField(
+                        controller: nameController,
+                        style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 13),
+                        decoration: InputDecoration(
+                          hintText: 'e.g. Factory General Manager',
+                          hintStyle: const TextStyle(color: TexoraColors.textMuted, fontSize: 12),
+                          filled: true,
+                          fillColor: TexoraColors.inputBg,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: TexoraColors.cardBorder)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Rejection Rationale:',
+                        style: TextStyle(color: TexoraColors.textPrimary, fontSize: 12, fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 6),
+                      TextField(
+                        controller: notesController,
+                        maxLines: 2,
+                        style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 13),
+                        decoration: InputDecoration(
+                          hintText: 'Enter mandatory audit justification...',
+                          hintStyle: const TextStyle(color: TexoraColors.textMuted, fontSize: 12),
+                          filled: true,
+                          fillColor: TexoraColors.inputBg,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: TexoraColors.cardBorder)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               actions: [
                 TextButton(
                   onPressed: isSubmitting ? null : () => Navigator.of(ctx).pop(),
-                  child: const Text('Cancel', style: TextStyle(color: Color(0xFF94A3B8))),
+                  child: const Text('Cancel', style: TextStyle(color: TexoraColors.textMuted)),
                 ),
                 ElevatedButton.icon(
                   onPressed: isSubmitting
@@ -500,33 +501,27 @@ class _ApprovalCenterScreenState extends State<ApprovalCenterScreen> {
                           final approvalId = approval['id'] as int;
                           final resp = await _apiService.rejectApprovalRequest(
                             approvalId,
-                            rejectedBy: roleController.text.trim(),
+                            rejectedBy: nameController.text.trim(),
                             responseNotes: notesController.text.trim(),
                           );
                           if (ctx.mounted) Navigator.of(ctx).pop();
-                          if (resp['success'] == false) {
+                          if (resp['error'] != null) {
                             if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Rejection Failed: ${resp['error'] ?? 'Unknown error'}'),
-                                  backgroundColor: AppColors.errorRed,
-                                ),
+                                SnackBar(content: Text('Rejection Failed: ${resp['error']}'), backgroundColor: TexoraColors.critical),
                               );
                             }
                           } else {
                             if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Request marked Rejected and logged to Audit Trail.'),
-                                  backgroundColor: AppColors.errorRed,
-                                ),
+                                const SnackBar(content: Text('Request marked Rejected and logged to Audit Trail.'), backgroundColor: TexoraColors.critical),
                               );
                               _loadApprovals();
                             }
                           }
                         },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.errorRed,
+                    backgroundColor: TexoraColors.critical,
                     foregroundColor: Colors.white,
                   ),
                   icon: isSubmitting
@@ -545,7 +540,7 @@ class _ApprovalCenterScreenState extends State<ApprovalCenterScreen> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: const Color(0xFF0B1120),
+      color: TexoraColors.workspaceBg,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -569,10 +564,10 @@ class _ApprovalCenterScreenState extends State<ApprovalCenterScreen> {
 
   Widget _buildTopHeader() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       decoration: const BoxDecoration(
-        color: Color(0xFF0F172A),
-        border: Border(bottom: BorderSide(color: Color(0xFF1E293B))),
+        color: TexoraColors.cardBg,
+        border: Border(bottom: BorderSide(color: TexoraColors.cardBorder)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -589,15 +584,15 @@ class _ApprovalCenterScreenState extends State<ApprovalCenterScreen> {
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: AppColors.primaryBlue.withAlpha(35),
+                        color: TexoraColors.primaryBlue.withAlpha(20),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Icon(Icons.gavel_rounded, color: AppColors.primaryBlueLight, size: 20),
+                      child: const Icon(Icons.gavel_rounded, color: TexoraColors.primaryBlue, size: 20),
                     ),
                     const Text(
                       'Manager Approval Center',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: TexoraColors.textPrimary,
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
                         letterSpacing: -0.4,
@@ -606,13 +601,13 @@ class _ApprovalCenterScreenState extends State<ApprovalCenterScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF1E293B),
+                        color: TexoraColors.inputBg,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFF334155)),
+                        border: Border.all(color: TexoraColors.cardBorder),
                       ),
                       child: const Text(
                         'Human-In-The-Loop Governance',
-                        style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.w600),
+                        style: TextStyle(color: TexoraColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w600),
                       ),
                     ),
                   ],
@@ -620,7 +615,7 @@ class _ApprovalCenterScreenState extends State<ApprovalCenterScreen> {
                 const SizedBox(height: 4),
                 const Text(
                   'Review and authorize high-impact AI agent actions, production reroutes, and factory maintenance dispatches.',
-                  style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                  style: TextStyle(color: TexoraColors.textSecondary, fontSize: 12),
                 ),
               ],
             ),
@@ -630,10 +625,10 @@ class _ApprovalCenterScreenState extends State<ApprovalCenterScreen> {
             children: [
               OutlinedButton.icon(
                 onPressed: _loadApprovals,
-                icon: const Icon(Icons.refresh_rounded, size: 16, color: Color(0xFF94A3B8)),
-                label: const Text('Refresh', style: TextStyle(color: Color(0xFFCBD5E1), fontSize: 12)),
+                icon: const Icon(Icons.refresh_rounded, size: 16, color: TexoraColors.textSecondary),
+                label: const Text('Refresh', style: TextStyle(color: TexoraColors.textSecondary, fontSize: 12)),
                 style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Color(0xFF334155)),
+                  side: const BorderSide(color: TexoraColors.cardBorder),
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 ),
               ),
@@ -653,8 +648,8 @@ class _ApprovalCenterScreenState extends State<ApprovalCenterScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
       decoration: const BoxDecoration(
-        color: Color(0xFF0F172A),
-        border: Border(bottom: BorderSide(color: Color(0xFF1E293B))),
+        color: TexoraColors.cardBg,
+        border: Border(bottom: BorderSide(color: TexoraColors.cardBorder)),
       ),
       child: Row(
         children: [
@@ -662,7 +657,7 @@ class _ApprovalCenterScreenState extends State<ApprovalCenterScreen> {
             title: 'PENDING ACTION GATES',
             value: '$pendingCount',
             icon: Icons.hourglass_top_rounded,
-            color: pendingCount > 0 ? const Color(0xFFF59E0B) : const Color(0xFF94A3B8),
+            color: pendingCount > 0 ? TexoraColors.warning : TexoraColors.textMuted,
             isAlert: pendingCount > 0,
           ),
           const SizedBox(width: 14),
@@ -670,21 +665,21 @@ class _ApprovalCenterScreenState extends State<ApprovalCenterScreen> {
             title: 'AUTHORIZED & EXECUTED',
             value: '$approvedCount',
             icon: Icons.check_circle_outline_rounded,
-            color: AppColors.successGreen,
+            color: TexoraColors.success,
           ),
           const SizedBox(width: 14),
           _buildKpiCard(
             title: 'REVISIONS REQUESTED',
             value: '$revisionCount',
             icon: Icons.history_edu_rounded,
-            color: const Color(0xFF38BDF8),
+            color: TexoraColors.info,
           ),
           const SizedBox(width: 14),
           _buildKpiCard(
             title: 'REJECTED BY MANAGERS',
             value: '$rejectedCount',
             icon: Icons.cancel_outlined,
-            color: AppColors.errorRed,
+            color: TexoraColors.critical,
           ),
         ],
       ),
@@ -702,10 +697,10 @@ class _ApprovalCenterScreenState extends State<ApprovalCenterScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E293B).withAlpha(120),
+          color: TexoraColors.workspaceBg,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isAlert ? color.withAlpha(140) : const Color(0xFF334155),
+            color: isAlert ? color.withAlpha(140) : TexoraColors.cardBorder,
             width: isAlert ? 1.4 : 1.0,
           ),
         ),
@@ -714,7 +709,7 @@ class _ApprovalCenterScreenState extends State<ApprovalCenterScreen> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: color.withAlpha(35),
+                color: color.withAlpha(25),
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Icon(icon, color: color, size: 18),
@@ -726,12 +721,12 @@ class _ApprovalCenterScreenState extends State<ApprovalCenterScreen> {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(color: Color(0xFF64748B), fontSize: 9.5, fontWeight: FontWeight.w700, letterSpacing: 0.5),
+                    style: const TextStyle(color: TexoraColors.textMuted, fontSize: 9.5, fontWeight: FontWeight.w700, letterSpacing: 0.5),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     value,
-                    style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800),
+                    style: TextStyle(color: isAlert ? color : TexoraColors.textPrimary, fontSize: 18, fontWeight: FontWeight.w800),
                   ),
                 ],
               ),
@@ -754,8 +749,8 @@ class _ApprovalCenterScreenState extends State<ApprovalCenterScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       decoration: const BoxDecoration(
-        color: Color(0xFF0B1120),
-        border: Border(bottom: BorderSide(color: Color(0xFF1E293B))),
+        color: TexoraColors.cardBg,
+        border: Border(bottom: BorderSide(color: TexoraColors.cardBorder)),
       ),
       child: Row(
         children: [
@@ -771,15 +766,15 @@ class _ApprovalCenterScreenState extends State<ApprovalCenterScreen> {
                     child: ChoiceChip(
                       label: Text('${tab['label']} (${_countForStatus(tab['id']!)})'),
                       selected: isSelected,
-                      selectedColor: AppColors.primaryBlue.withAlpha(60),
-                      backgroundColor: const Color(0xFF1E293B),
+                      selectedColor: TexoraColors.sidebarActivePill,
+                      backgroundColor: TexoraColors.workspaceBg,
                       labelStyle: TextStyle(
-                        color: isSelected ? Colors.white : const Color(0xFF94A3B8),
+                        color: isSelected ? TexoraColors.primaryBlue : TexoraColors.textSecondary,
                         fontSize: 12,
                         fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                       ),
                       side: BorderSide(
-                        color: isSelected ? AppColors.primaryBlueLight : const Color(0xFF334155),
+                        color: isSelected ? TexoraColors.primaryBlue : TexoraColors.cardBorder,
                       ),
                       onSelected: (selected) {
                         if (selected) {
@@ -807,14 +802,14 @@ class _ApprovalCenterScreenState extends State<ApprovalCenterScreen> {
                   _searchQuery = val.trim();
                 });
               },
-              style: const TextStyle(color: Colors.white, fontSize: 12),
+              style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 12),
               decoration: InputDecoration(
                 hintText: 'Search code, incident, action...',
-                hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
-                prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 16),
+                hintStyle: const TextStyle(color: TexoraColors.textMuted, fontSize: 11),
+                prefixIcon: const Icon(Icons.search_rounded, color: TexoraColors.textMuted, size: 16),
                 suffixIcon: _searchQuery.isNotEmpty
                     ? IconButton(
-                        icon: const Icon(Icons.close_rounded, size: 14, color: Color(0xFF94A3B8)),
+                        icon: const Icon(Icons.close_rounded, size: 14, color: TexoraColors.textMuted),
                         onPressed: () {
                           _searchController.clear();
                           setState(() => _searchQuery = '');
@@ -822,10 +817,10 @@ class _ApprovalCenterScreenState extends State<ApprovalCenterScreen> {
                       )
                     : null,
                 filled: true,
-                fillColor: const Color(0xFF1E293B),
+                fillColor: TexoraColors.inputBg,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(6),
-                  borderSide: const BorderSide(color: Color(0xFF334155)),
+                  borderSide: const BorderSide(color: TexoraColors.cardBorder),
                 ),
                 contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 10),
               ),
@@ -842,9 +837,9 @@ class _ApprovalCenterScreenState extends State<ApprovalCenterScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            CircularProgressIndicator(color: AppColors.primaryBlueLight),
+            CircularProgressIndicator(color: TexoraColors.primaryBlue),
             SizedBox(height: 16),
-            Text('Loading approval requests from backend...', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+            Text('Loading approval requests from backend...', style: TextStyle(color: TexoraColors.textSecondary, fontSize: 13)),
           ],
         ),
       );
@@ -852,25 +847,20 @@ class _ApprovalCenterScreenState extends State<ApprovalCenterScreen> {
 
     if (_errorMessage != null) {
       return Center(
-        child: Container(
+        child: Padding(
           padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1E293B),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.errorRed.withAlpha(100)),
-          ),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.error_outline_rounded, color: AppColors.errorRed, size: 36),
+              const Icon(Icons.error_outline_rounded, color: TexoraColors.critical, size: 40),
               const SizedBox(height: 12),
-              Text(_errorMessage!, style: const TextStyle(color: Colors.white, fontSize: 13)),
+              Text(_errorMessage!, style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 13)),
               const SizedBox(height: 16),
               ElevatedButton.icon(
                 onPressed: _loadApprovals,
                 icon: const Icon(Icons.refresh_rounded, size: 16),
                 label: const Text('Retry Connection'),
-                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryBlue),
+                style: ElevatedButton.styleFrom(backgroundColor: TexoraColors.primaryBlue),
               ),
             ],
           ),
@@ -887,23 +877,23 @@ class _ApprovalCenterScreenState extends State<ApprovalCenterScreen> {
           children: [
             Container(
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1E293B),
+              decoration: const BoxDecoration(
+                color: TexoraColors.inputBg,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.task_alt_rounded, color: Color(0xFF64748B), size: 40),
+              child: const Icon(Icons.task_alt_rounded, color: TexoraColors.textMuted, size: 40),
             ),
             const SizedBox(height: 16),
             const Text(
               'No Approval Requests Found',
-              style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700),
+              style: TextStyle(color: TexoraColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 6),
             Text(
               _searchQuery.isNotEmpty
                   ? 'No approval matching search criteria "$_searchQuery".'
                   : 'All autonomous workflows are running normally with no pending gates.',
-              style: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+              style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 12),
             ),
           ],
         ),
@@ -939,63 +929,66 @@ class _ApprovalCenterScreenState extends State<ApprovalCenterScreen> {
 
     switch (status) {
       case 'APPROVED':
-        statusColor = AppColors.successGreen;
+        statusColor = TexoraColors.success;
         statusLabel = 'APPROVED & EXECUTED';
         statusIcon = Icons.check_circle_rounded;
         break;
       case 'REJECTED':
-        statusColor = AppColors.errorRed;
+        statusColor = TexoraColors.critical;
         statusLabel = 'REJECTED BY MANAGER';
         statusIcon = Icons.cancel_rounded;
         break;
       case 'REVISION_REQUESTED':
-        statusColor = const Color(0xFF38BDF8);
+        statusColor = TexoraColors.warning;
         statusLabel = 'REVISION REQUESTED';
         statusIcon = Icons.history_edu_rounded;
         break;
-      case 'EXPIRED':
-        statusColor = const Color(0xFF94A3B8);
-        statusLabel = 'EXPIRED / TIMEOUT';
-        statusIcon = Icons.timer_off_rounded;
-        break;
       default:
-        statusColor = const Color(0xFFF59E0B);
-        statusLabel = 'PENDING REVIEW';
+        statusColor = TexoraColors.warning;
+        statusLabel = 'ACTION GATE PENDING';
         statusIcon = Icons.hourglass_top_rounded;
     }
 
     Color riskColor;
-    switch (risk) {
+    switch (risk.toString().toUpperCase()) {
       case 'CRITICAL':
-        riskColor = AppColors.errorRed;
+        riskColor = TexoraColors.critical;
         break;
       case 'HIGH':
-        riskColor = const Color(0xFFF59E0B);
+        riskColor = const Color(0xFFF97316);
+        break;
+      case 'MEDIUM':
+        riskColor = TexoraColors.warning;
         break;
       default:
-        riskColor = const Color(0xFF38BDF8);
+        riskColor = TexoraColors.info;
     }
+
+    final isPending = status == 'PENDING';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: TexoraColors.cardBg,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: status == 'PENDING' ? const Color(0xFFF59E0B).withAlpha(120) : const Color(0xFF334155),
-          width: status == 'PENDING' ? 1.4 : 1.0,
+          color: isPending ? statusColor.withAlpha(120) : TexoraColors.cardBorder,
+          width: isPending ? 1.4 : 1.0,
         ),
+        boxShadow: const [
+          BoxShadow(color: Color(0x05000000), blurRadius: 8, offset: Offset(0, 2)),
+        ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Card Header
+          // Top Bar of Card
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
             decoration: BoxDecoration(
-              color: const Color(0xFF0F172A).withAlpha(180),
+              color: isPending ? statusColor.withAlpha(15) : TexoraColors.workspaceBg,
               borderRadius: const BorderRadius.vertical(top: Radius.circular(9)),
-              border: const Border(bottom: BorderSide(color: Color(0xFF334155))),
+              border: const Border(bottom: BorderSide(color: TexoraColors.cardBorder)),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1003,52 +996,54 @@ class _ApprovalCenterScreenState extends State<ApprovalCenterScreen> {
                 Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF1E293B),
+                        color: TexoraColors.cardBg,
                         borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: const Color(0xFF475569)),
+                        border: Border.all(color: TexoraColors.cardBorder),
                       ),
                       child: Text(
                         code,
-                        style: const TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w800, fontFamily: 'monospace'),
+                        style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 11.5, fontWeight: FontWeight.w800),
                       ),
                     ),
                     const SizedBox(width: 10),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
                       decoration: BoxDecoration(
-                        color: riskColor.withAlpha(35),
+                        color: riskColor.withAlpha(25),
                         borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: riskColor.withAlpha(90)),
+                        border: Border.all(color: riskColor.withAlpha(100)),
                       ),
-                      child: Text(
-                        '$risk RISK',
-                        style: TextStyle(color: riskColor, fontSize: 10, fontWeight: FontWeight.w700),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.shield_rounded, size: 11, color: riskColor),
+                          const SizedBox(width: 4),
+                          Text(
+                            '$risk RISK',
+                            style: TextStyle(color: riskColor, fontSize: 10, fontWeight: FontWeight.w800),
+                          ),
+                        ],
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
-                      'Requested by $agent',
-                      style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
                     ),
                   ],
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: statusColor.withAlpha(35),
-                    borderRadius: BorderRadius.circular(6),
+                    color: statusColor.withAlpha(25),
+                    borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: statusColor.withAlpha(100)),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(statusIcon, color: statusColor, size: 14),
-                      const SizedBox(width: 6),
+                      Icon(statusIcon, size: 12, color: statusColor),
+                      const SizedBox(width: 5),
                       Text(
                         statusLabel,
-                        style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.w700),
+                        style: TextStyle(color: statusColor, fontSize: 10.5, fontWeight: FontWeight.w700),
                       ),
                     ],
                   ),
@@ -1057,13 +1052,12 @@ class _ApprovalCenterScreenState extends State<ApprovalCenterScreen> {
             ),
           ),
 
-          // Card Body
+          // Main Card Body
           Padding(
             padding: const EdgeInsets.all(18),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Title & Incident Reference
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1073,138 +1067,139 @@ class _ApprovalCenterScreenState extends State<ApprovalCenterScreen> {
                         children: [
                           Text(
                             title,
-                            style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700),
+                            style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w700),
                           ),
                           const SizedBox(height: 6),
-                          Row(
-                            children: [
-                              const Icon(Icons.link_rounded, color: Color(0xFF64748B), size: 14),
-                              const SizedBox(width: 6),
-                              Text(
-                                'Linked Incident: $incCode — $incSumm',
-                                style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.w500),
-                              ),
-                            ],
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: TexoraColors.inputBg,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: TexoraColors.cardBorder),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.bolt_rounded, size: 15, color: TexoraColors.primaryBlue),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    action,
+                                    style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 12, fontWeight: FontWeight.w600),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ],
                       ),
                     ),
-                    if (createdAt.isNotEmpty)
-                      Text(
-                        'Created: ${createdAt.length > 19 ? createdAt.substring(0, 19).replaceAll('T', ' ') : createdAt}',
-                        style: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
-                      ),
                   ],
                 ),
-
-                const SizedBox(height: 12),
-
-                // Requested Action Highlight
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0F172A),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: const Color(0xFF334155)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.bolt_rounded, color: Color(0xFFF59E0B), size: 18),
-                      const SizedBox(width: 10),
-                      const Text(
-                        'PROPOSED ACTION:',
-                        style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          action,
-                          style: const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
                 if (desc.isNotEmpty) ...[
                   const SizedBox(height: 10),
                   Text(
                     desc,
-                    style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 12, height: 1.4),
+                    style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 12, height: 1.4),
                   ),
                 ],
+                const SizedBox(height: 14),
 
-                // Decision History (If approved, revision, or rejected)
-                if (status != 'PENDING' && (approvedBy.isNotEmpty || responseNotes.isNotEmpty)) ...[
-                  const SizedBox(height: 14),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0F172A),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: statusColor.withAlpha(60)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                // Incident & Source Agent Row
+                Wrap(
+                  spacing: 16,
+                  runSpacing: 8,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Row(
-                          children: [
-                            Icon(Icons.person_pin_rounded, color: statusColor, size: 16),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Decision Authority: $approvedBy',
-                              style: TextStyle(color: statusColor, fontSize: 11.5, fontWeight: FontWeight.w700),
-                            ),
-                          ],
-                        ),
-                        if (responseNotes.isNotEmpty) ...[
-                          const SizedBox(height: 6),
-                          Text(
-                            'Remarks: "$responseNotes"',
-                            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontStyle: FontStyle.italic),
-                          ),
+                        const Icon(Icons.smart_toy_outlined, size: 14, color: TexoraColors.textMuted),
+                        const SizedBox(width: 6),
+                        const Text('Source Agent: ', style: TextStyle(color: TexoraColors.textMuted, fontSize: 11)),
+                        Text(agent, style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 11, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.warning_amber_rounded, size: 14, color: TexoraColors.warning),
+                        const SizedBox(width: 6),
+                        const Text('Incident: ', style: TextStyle(color: TexoraColors.textMuted, fontSize: 11)),
+                        Text('$incCode — $incSumm', style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 11, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                    if (createdAt.isNotEmpty)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.schedule_rounded, size: 14, color: TexoraColors.textMuted),
+                          const SizedBox(width: 6),
+                          Text(createdAt, style: const TextStyle(color: TexoraColors.textMuted, fontSize: 11)),
                         ],
+                      ),
+                  ],
+                ),
+
+                // Review Audit History (if not pending)
+                if (!isPending) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: TexoraColors.inputBg,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: TexoraColors.cardBorder),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(statusIcon, size: 14, color: statusColor),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Decision by: $approvedBy ${responseNotes.isNotEmpty ? "— Remarks: $responseNotes" : ""}',
+                            style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 11.5),
+                          ),
+                        ),
                       ],
                     ),
                   ),
                 ],
 
-                // Action Buttons for PENDING
-                if (status == 'PENDING') ...[
+                // Action Buttons for Pending Approvals
+                if (isPending) ...[
                   const SizedBox(height: 16),
-                  const Divider(color: Color(0xFF334155), height: 1),
+                  const Divider(color: TexoraColors.cardBorder, height: 1),
                   const SizedBox(height: 14),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
                       OutlinedButton.icon(
                         onPressed: () => _showRejectDialog(item),
-                        icon: const Icon(Icons.block_rounded, size: 14, color: AppColors.errorRed),
-                        label: const Text('Reject', style: TextStyle(color: AppColors.errorRed, fontSize: 12)),
+                        icon: const Icon(Icons.close_rounded, size: 14, color: TexoraColors.critical),
+                        label: const Text('Reject', style: TextStyle(color: TexoraColors.critical, fontSize: 12, fontWeight: FontWeight.w600)),
                         style: OutlinedButton.styleFrom(
-                          side: BorderSide(color: AppColors.errorRed.withAlpha(100)),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          side: const BorderSide(color: TexoraColors.criticalBorder),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                         ),
                       ),
                       const SizedBox(width: 10),
                       OutlinedButton.icon(
                         onPressed: () => _showRevisionDialog(item),
-                        icon: const Icon(Icons.history_edu_rounded, size: 14, color: Color(0xFF38BDF8)),
-                        label: const Text('Request Revision', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 12)),
+                        icon: const Icon(Icons.history_edu_rounded, size: 14, color: TexoraColors.warning),
+                        label: const Text('Request Revision', style: TextStyle(color: TexoraColors.warning, fontSize: 12, fontWeight: FontWeight.w600)),
                         style: OutlinedButton.styleFrom(
-                          side: BorderSide(color: const Color(0xFF38BDF8).withAlpha(100)),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          side: const BorderSide(color: TexoraColors.warningBorder),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                         ),
                       ),
                       const SizedBox(width: 10),
                       ElevatedButton.icon(
                         onPressed: () => _showApproveDialog(item),
                         icon: const Icon(Icons.check_circle_rounded, size: 15),
-                        label: const Text('Authorize & Execute Action', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                        label: const Text('Authorize & Execute', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.successGreen,
+                          backgroundColor: TexoraColors.success,
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
                         ),
                       ),
                     ],

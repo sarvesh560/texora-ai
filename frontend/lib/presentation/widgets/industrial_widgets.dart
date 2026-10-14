@@ -133,18 +133,23 @@ class IndustrialMetricCard extends StatelessWidget {
                   ),
                   child: Icon(icon, color: accentColor, size: 18),
                 ),
+                const SizedBox(width: 6),
                 if (trailing != null)
-                  trailing!
+                  Flexible(child: trailing!)
                 else if (sourceProvenance != null)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      sourceProvenance!,
-                      style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 9, fontWeight: FontWeight.bold),
+                  Flexible(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E293B),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        sourceProvenance!,
+                        style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 9, fontWeight: FontWeight.bold),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
                     ),
                   ),
               ],

@@ -44,10 +44,12 @@ class RecoveryOrchestrator:
         self.production_agent = ProductionImpactAgent()
 
     def orchestrate_incident_recovery(
-        self, incident_id: int, force_reanalyze: bool = False
+        self, incident_id: int, force_reanalyze: bool = False, force_provider: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Executes end-to-end multi-agent coordination for an incident and builds a RecoveryCase.
+        Executes all 4 agents in sequential dependency order:
+        1. Machine Health -> 2. Maintenance -> 3. Inventory -> 4. Production Impact
         """
         incident = FactoryIncident.objects.select_related("machine", "department", "factory").filter(id=incident_id).first()
         if not incident:
@@ -100,35 +102,49 @@ class RecoveryOrchestrator:
         ).order_by("-completed_at").first()
 
         health_data = {}
-        if health_exec and health_exec.context_payload:
+        if health_exec and health_exec.context_payload and not force_reanalyze:
             health_decision = health_exec.decisions.first()
+            structured = health_exec.context_payload.get("structured_output") or {}
             health_data = {
                 "execution_id": str(health_exec.execution_id),
                 "summary": health_exec.execution_summary,
                 "severity_assessment": incident.severity,
                 "confidence_score": float(health_decision.confidence_score) if health_decision else 85.0,
-                "possible_root_causes": [{"hypothesis": incident.root_cause_hypothesis, "likelihood": "HIGH", "confidence_score": 85.0}],
+                "possible_root_causes": structured.get("possible_root_causes") or [{"hypothesis": incident.root_cause_hypothesis, "likelihood": "HIGH", "confidence_score": 85.0}],
+                "recommended_maintenance_checks": structured.get("recommended_maintenance_checks", []),
+                "observed_abnormal_conditions": structured.get("observed_abnormal_conditions", []),
             }
         else:
+            if force_provider:
+                from apps.ai_agents.llm_client import get_llm_provider
+                self.health_agent.provider = get_llm_provider(force_provider)
             investigation_res = self.health_agent.investigate_incident(incident_id)
             health_data = investigation_res.get("findings", {})
 
-        # 3. Trigger Maintenance Coordination
+        # 3. Trigger Maintenance Coordination (Agent 2)
         maint_res = self.maintenance_coordinator.coordinate_maintenance(
-            incident_id=incident_id, health_diagnosis=health_data
+            incident_id=incident_id,
+            health_diagnosis=health_data,
+            force_provider=force_provider,
         )
 
-        # 4. Trigger Inventory Coordination
+        # 4. Trigger Inventory Coordination (Agent 3)
         inv_res = self.inventory_coordinator.coordinate_inventory(
             incident_id=incident_id,
             health_diagnosis=health_data,
             maintenance_recommendation=maint_res,
+            force_provider=force_provider,
         )
 
-        # 5. Trigger Production Impact Assessment
+        # 5. Trigger Production Impact Assessment (Agent 4)
         estimated_downtime = float(maint_res.get("estimated_hours", 1.5))
         prod_res = self.production_agent.evaluate_production_impact(
-            incident_id=incident_id, estimated_downtime_hours=estimated_downtime
+            incident_id=incident_id,
+            estimated_downtime_hours=estimated_downtime,
+            health_diagnosis=health_data,
+            maintenance_recommendation=maint_res,
+            inventory_assessment=inv_res,
+            force_provider=force_provider,
         )
 
         # 6. Calculate Evidence-Based Priority Score (0.00 to 100.00)

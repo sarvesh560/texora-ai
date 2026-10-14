@@ -313,4 +313,38 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(milliseconds: 50));
   });
+
+  group('MachineHealthAgentScreen Responsive Viewports', () {
+    for (final size in [
+      const Size(1920, 1080),
+      const Size(1440, 900),
+      const Size(1024, 768),
+      const Size(768, 1024),
+      const Size(480, 854),
+      const Size(360, 640),
+      const Size(320, 568),
+    ]) {
+      testWidgets('Renders at ${size.width.toInt()}x${size.height.toInt()} without overflow', (tester) async {
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(() => tester.view.resetPhysicalSize());
+
+        final mockService = createMockApiService();
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: MachineHealthAgentScreen(apiService: mockService),
+          ),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+
+        expect(tester.takeException(), isNull);
+        expect(find.byType(MachineHealthAgentScreen), findsOneWidget);
+
+        await tester.pumpWidget(const SizedBox());
+        await tester.pump(const Duration(milliseconds: 50));
+      });
+    }
+  });
 }

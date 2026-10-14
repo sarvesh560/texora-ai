@@ -8,6 +8,7 @@ Verifies:
 5. Inventory Operational Safety Gating (No warehouse stock deduction before manager approval)
 6. Server-side RBAC & AI Self-Approval Rejection
 """
+
 import pytest
 from unittest.mock import patch, MagicMock
 from decimal import Decimal
@@ -22,7 +23,7 @@ from apps.ai_agents.models import AgentDefinition, AgentExecution, AgentAction, 
 from apps.ai_agents.action_service import ActionSafetyService, ActionSafetyLevel
 from apps.ai_agents.machine_health_agent import MachineHealthAgent
 from apps.ai_agents.inventory_coordinator import InventoryCoordinatorAgent
-from apps.ai_agents.llm_client import GeminiProvider, LLMResponse
+from apps.ai_agents.llm_client import GeminiProvider, LLMResponse, GeminiCircuitBreaker
 from apps.digital_twin.models import WhatIfScenario, ScenarioMachineChange
 from apps.digital_twin.simulation_engine import WhatIfSimulationEngine
 
@@ -167,6 +168,7 @@ class TestPhase105ReliabilityAndSafety:
 
     def test_gemini_429_fast_failover(self, factory_setup):
         """Test that HTTP 429 quota exhaustion fast-fails over to deterministic fallback without slow loops."""
+        GeminiCircuitBreaker.reset()
         provider = GeminiProvider(api_key="test_key")
 
         mock_response = MagicMock()

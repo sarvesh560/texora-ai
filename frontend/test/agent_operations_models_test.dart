@@ -218,4 +218,207 @@ void main() {
       expect(model.strategyComparison[1].rank, 1);
     });
   });
+
+  group('AiProviderHealthModel & ProviderStatusModel Regression Tests', () {
+    test('ProviderStatusModel parses OPERATIONAL state accurately', () {
+      final json = {
+        'configured': true,
+        'is_configured': true,
+        'status': 'OPERATIONAL',
+        'model': 'qwen/qwen3.8-27b',
+        'ready': true,
+        'circuit_breaker_open': false,
+        'circuit_breaker_status': 'CLOSED',
+        'latency_ms': 485,
+        'last_successful_at': '2026-10-13T04:20:00Z',
+        'message': 'Live inference operational • Circuit breaker closed.',
+      };
+
+      final status = ProviderStatusModel.fromJson(json);
+      expect(status.configured, true);
+      expect(status.status, 'OPERATIONAL');
+      expect(status.model, 'qwen/qwen3.8-27b');
+      expect(status.latencyMs, 485);
+      expect(status.circuitBreakerOpen, false);
+      expect(status.circuitBreakerStatus, 'CLOSED');
+      expect(status.isOperational, true);
+      expect(status.isConfigured, true);
+      expect(status.isRateLimited, false);
+      expect(status.isUnavailable, false);
+      expect(status.isNotConfigured, false);
+    });
+
+    test('ProviderStatusModel parses CONFIGURED state accurately', () {
+      final json = {
+        'configured': true,
+        'status': 'CONFIGURED',
+        'model': 'gemini-3.5-flash',
+        'ready': true,
+        'circuit_breaker_open': false,
+        'circuit_breaker_status': 'CLOSED',
+        'message': 'API key configured • Standing by for secondary failover.',
+      };
+
+      final status = ProviderStatusModel.fromJson(json);
+      expect(status.configured, true);
+      expect(status.status, 'CONFIGURED');
+      expect(status.isOperational, false);
+      expect(status.isConfigured, true);
+      expect(status.isNotConfigured, false);
+      expect(status.isRateLimited, false);
+      expect(status.isUnavailable, false);
+    });
+
+    test('ProviderStatusModel parses RATE_LIMITED state accurately', () {
+      final json = {
+        'configured': true,
+        'status': 'RATE_LIMITED',
+        'model': 'qwen/qwen3.8-27b',
+        'ready': false,
+        'circuit_breaker_open': true,
+        'circuit_breaker_status': 'OPEN (COOLDOWN)',
+        'cooldown_message': 'Groq Circuit Breaker open (RATE_LIMITED)',
+      };
+
+      final status = ProviderStatusModel.fromJson(json);
+      expect(status.isRateLimited, true);
+      expect(status.isOperational, false);
+      expect(status.circuitBreakerOpen, true);
+      expect(status.circuitBreakerStatus, 'OPEN (COOLDOWN)');
+      expect(status.message, contains('RATE_LIMITED'));
+    });
+
+    test('ProviderStatusModel parses UNAVAILABLE state accurately', () {
+      final json = {
+        'configured': true,
+        'status': 'UNAVAILABLE',
+        'circuit_breaker_open': true,
+        'circuit_breaker_status': 'OPEN (COOLDOWN)',
+        'message': 'Service Unavailable (HTTP 503)',
+      };
+
+      final status = ProviderStatusModel.fromJson(json);
+      expect(status.isUnavailable, true);
+      expect(status.isOperational, false);
+      expect(status.circuitBreakerOpen, true);
+    });
+
+    test('ProviderStatusModel parses NOT_CONFIGURED state accurately', () {
+      final json = {
+        'configured': false,
+        'is_configured': false,
+        'status': 'NOT_CONFIGURED',
+        'message': 'GROQ_API_KEY is not set in environment.',
+      };
+
+      final status = ProviderStatusModel.fromJson(json);
+      expect(status.isNotConfigured, true);
+      expect(status.isOperational, false);
+      expect(status.isConfigured, false);
+      expect(status.configured, false);
+    });
+
+    test('ProviderStatusModel handles is_configured backward compatibility fallback', () {
+      final json = {
+        'is_configured': true,
+        'status': 'CONFIGURED',
+      };
+
+      final status = ProviderStatusModel.fromJson(json);
+      expect(status.configured, true);
+      expect(status.isConfigured, true);
+    });
+
+    test('AiProviderHealthModel parses complete backend payload with provenance', () {
+      final json = {
+        'routing_mode': 'auto',
+        'primary_provider': 'groq',
+        'secondary_provider': 'gemini',
+        'fallback_provider': 'deterministic_domain_engine',
+        'last_successful_inference': {
+          'timestamp': '2026-10-13T04:20:00Z',
+          'timestamp_epoch': 1791865200.0,
+          'provider': 'GroqCloud',
+          'model': 'qwen/qwen3.8-27b',
+          'latency_ms': 485,
+        },
+        'groq': {
+          'configured': true,
+          'is_configured': true,
+          'status': 'OPERATIONAL',
+          'model': 'qwen/qwen3.8-27b',
+          'ready': true,
+          'circuit_breaker_open': false,
+          'circuit_breaker_status': 'CLOSED',
+          'latency_ms': 485,
+          'last_successful_at': '2026-10-13T04:20:00Z',
+          'message': 'Live inference operational',
+        },
+        'gemini': {
+          'configured': true,
+          'is_configured': true,
+          'status': 'CONFIGURED',
+          'model': 'gemini-3.5-flash',
+          'ready': true,
+          'circuit_breaker_open': false,
+          'circuit_breaker_status': 'CLOSED',
+          'latency_ms': null,
+          'last_successful_at': null,
+          'message': 'API key configured • Standing by',
+        },
+        'deterministic_fallback': {
+          'configured': true,
+          'is_configured': true,
+          'status': 'OPERATIONAL',
+          'model': 'texora-industrial-heuristics-v2',
+          'ready': true,
+          'circuit_breaker_open': false,
+          'circuit_breaker_status': 'BUILT-IN (STANDBY)',
+          'message': 'Deterministic Offline Rule Engine • Industrial Heuristics Fallback',
+          'latency_ms': 0,
+        },
+        'current_fallback_state': 'STANDBY',
+      };
+
+      final health = AiProviderHealthModel.fromJson(json);
+      expect(health.routingMode, 'auto');
+      expect(health.primaryProvider, 'groq');
+      expect(health.secondaryProvider, 'gemini');
+      expect(health.currentFallbackState, 'STANDBY');
+      expect(health.hasVerifiedInference, true);
+
+      expect(health.groq.isOperational, true);
+      expect(health.groq.latencyMs, 485);
+      expect(health.groq.model, 'qwen/qwen3.8-27b');
+      expect(health.groq.model, isNot(contains('claude')));
+      expect(health.gemini.isConfigured, true);
+      expect(health.gemini.isOperational, false);
+      expect(health.deterministicFallback.isOperational, true);
+      expect(health.deterministicFallback.message, contains('Deterministic Offline Rule Engine'));
+      expect(health.deterministicFallback.message, isNot(contains('100%')));
+
+      expect(health.lastSuccessfulInference?['provider'], 'GroqCloud');
+      expect(health.lastSuccessfulInference?['latency_ms'], 485);
+      expect(health.lastSuccessfulInference?['model'], 'qwen/qwen3.8-27b');
+      expect(health.lastSuccessfulInference?['model'], isNot(contains('claude')));
+    });
+
+    test('ProviderStatusModel parses isStale and prevents cross-provider model pollution', () {
+      final json = {
+        'configured': true,
+        'status': 'OPERATIONAL',
+        'model': 'qwen/qwen3.8-27b',
+        'is_stale': true,
+        'circuit_breaker_status': 'CLOSED',
+        'latency_ms': 520,
+        'last_successful_at': '2026-10-10T12:00:00Z',
+      };
+
+      final status = ProviderStatusModel.fromJson(json);
+      expect(status.isStale, true);
+      expect(status.isOperational, true);
+      expect(status.model, 'qwen/qwen3.8-27b');
+      expect(status.model, isNot(contains('gemini-1.5-pro')));
+    });
+  });
 }

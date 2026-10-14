@@ -218,5 +218,200 @@ void main() {
       expect(find.text('AI-Guided Field Repairs • Sensor Verification • Evidence-Based Incident Closure'), findsOneWidget);
       expect(find.byType(TextField), findsOneWidget);
     });
+
+    test('Ticket MNT-20261012104734-3F03 model representation in AWAITING_VERIFICATION state', () {
+      final json = {
+        'id': 44,
+        'ticket_number': 'MNT-20261012104734-3F03',
+        'machine': 2,
+        'machine_code': 'WEV-AJ-02',
+        'machine_name': 'Picanol OmniPlus-i Loom #2',
+        'machine_type_name': 'Air Jet Loom 340cm',
+        'department_name': 'Weaving Shed A',
+        'department_code': 'WEV',
+        'incident_reference': 'INC-20261012-0042',
+        'title': 'Corrective Repair: WEV-AJ-02 Drive Bearing Spalling',
+        'description': 'Main drive bearing replacement and realignment',
+        'priority': 'CRITICAL',
+        'status': 'AWAITING_VERIFICATION',
+        'assigned_technician': 'R. Sharma (Senior Diagnostic Tech)',
+        'created_by_agent': 'Maintenance Coordinator',
+        'root_cause': 'Fatigue wear on drive bearing #6204',
+        'parts_cost': '10550.00',
+        'labor_hours': '2.50',
+        'actual_repair_duration_minutes': '45',
+        'ai_suspected_causes': [],
+        'inspection_checklist': [
+          {'step_id': 1, 'task': 'Bearing vibration', 'status': 'DEFECT_FOUND', 'observed_value': '6.8 mm/s'}
+        ],
+        'confirmed_fault': 'Fatigue spalling on bearing #6204',
+        'fault_confirmation_notes': 'Acoustic and thermal probe confirmation',
+        'repair_performed': 'Bearing #6204 replaced and aligned',
+        'parts_replaced': [
+          {'item_code': 'SPR-BRG-6204', 'quantity': 1.0, 'deducted': true, 'unit_cost': 350.0}
+        ],
+        'remaining_issues': 'None',
+        'repair_completed_at': '2026-10-13T06:25:15Z',
+        'verification_status': 'AWAITING_AUTHORIZED_SIGNOFF',
+        'verification_summary': 'All 6 samples within nominal limits',
+        'verification_data': {
+          'outcome': 'AWAITING_AUTHORIZED_SIGNOFF',
+          'max_vibration': 2.35,
+          'max_temp': 56.4,
+          'is_healthy': true,
+        },
+        'authorized_signoff_by': '',
+        'authorized_signoff_at': null,
+        'signoff_notes': '',
+        'is_simulation': true,
+        'created_at': '2026-10-12T10:47:34Z',
+        'resolved_at': null,
+        'transitions': [
+          {
+            'id': 1,
+            'actor': 'R. Sharma',
+            'actor_role': 'Technician',
+            'previous_state': 'OPEN',
+            'new_state': 'ACCEPTED',
+            'reason': 'Accepted',
+            'timestamp': '2026-10-13T06:20:57Z',
+          },
+          {
+            'id': 2,
+            'actor': 'R. Sharma',
+            'actor_role': 'Technician',
+            'previous_state': 'REPAIR_IN_PROGRESS',
+            'new_state': 'REPAIR_COMPLETED',
+            'reason': 'Finished repair',
+            'timestamp': '2026-10-13T06:25:15Z',
+          },
+          {
+            'id': 3,
+            'actor': 'R. Sharma',
+            'actor_role': 'Technician',
+            'previous_state': 'REPAIR_COMPLETED',
+            'new_state': 'AWAITING_VERIFICATION',
+            'reason': 'Ready for verification',
+            'timestamp': '2026-10-13T06:25:15Z',
+          },
+        ],
+      };
+
+      final ticket = WorkOrderTicket.fromJson(json);
+      expect(ticket.ticketNumber, 'MNT-20261012104734-3F03');
+      expect(ticket.status, 'AWAITING_VERIFICATION');
+      expect(ticket.verificationStatus, 'AWAITING_AUTHORIZED_SIGNOFF');
+      expect(ticket.repairCompletedAt, isNotNull);
+      expect(ticket.partsReplaced.length, 1);
+      expect(ticket.partsReplaced.first['deducted'], true);
+      expect(ticket.transitions.length, 3);
+      expect(ticket.transitions.last.newState, 'AWAITING_VERIFICATION');
+    });
+
+    test('ExecutionDetailResponse for AWAITING_VERIFICATION ticket correctly structures evaluation', () {
+      final detailJson = {
+        'ticket': {
+          'id': 44,
+          'ticket_number': 'MNT-20261012104734-3F03',
+          'machine': 2,
+          'machine_code': 'WEV-AJ-02',
+          'machine_name': 'Loom #2',
+          'machine_type_name': 'Air Jet Loom',
+          'department_name': 'Weaving Shed A',
+          'department_code': 'WEV',
+          'incident_reference': 'INC-20261012-0042',
+          'title': 'Drive Bearing Repair',
+          'description': 'Repaired',
+          'priority': 'CRITICAL',
+          'status': 'AWAITING_VERIFICATION',
+          'assigned_technician': 'R. Sharma',
+          'created_by_agent': 'AI',
+          'root_cause': 'Bearing wear',
+          'parts_cost': '10550.00',
+          'labor_hours': '2.50',
+          'actual_repair_duration_minutes': '45',
+          'ai_suspected_causes': [],
+          'inspection_checklist': [],
+          'confirmed_fault': 'Fatigued bearing',
+          'fault_confirmation_notes': '',
+          'repair_performed': 'Replaced bearing',
+          'parts_replaced': [
+            {'item_code': 'SPR-BRG-6204', 'quantity': 1.0, 'deducted': true}
+          ],
+          'remaining_issues': '',
+          'repair_completed_at': '2026-10-13T06:25:15Z',
+          'verification_status': 'AWAITING_AUTHORIZED_SIGNOFF',
+          'verification_summary': 'Telemetry normalized',
+          'verification_data': {
+            'outcome': 'AWAITING_AUTHORIZED_SIGNOFF',
+            'is_healthy': true,
+            'max_vibration': 2.35,
+            'limit_vibration': 4.0,
+            'max_temp': 56.4,
+            'limit_temp': 75.0,
+          },
+          'authorized_signoff_by': '',
+          'signoff_notes': '',
+          'is_simulation': true,
+          'created_at': '2026-10-12T10:47:34Z',
+          'transitions': [],
+        },
+        'machine_limits': {
+          'warning_vibration_mms': 4.0,
+          'max_vibration_mms': 5.5,
+          'warning_temp_c': 75.0,
+          'max_temp_c': 85.0,
+          'min_rpm': 700,
+          'max_rpm': 1200,
+        },
+        'telemetry_trend': [
+          {
+            'id': 1,
+            'timestamp': '2026-10-13T06:25:20Z',
+            'vibration_mms': 2.35,
+            'temperature_c': 56.4,
+            'speed_rpm': 1050.0,
+            'power_kw': 12.0,
+          }
+        ],
+        'spare_parts_catalog': [
+          {
+            'item_code': 'SPR-BRG-6204',
+            'name': 'Deep Groove Ball Bearing 6204',
+            'current_stock': '11.00',
+            'unit': 'PCS',
+            'unit_cost': '350.00',
+          }
+        ],
+        'maintenance_history': [],
+        'verification_evaluation': {
+          'outcome': 'AWAITING_AUTHORIZED_SIGNOFF',
+          'summary': 'All telemetry within limits. Ready for manager sign-off.',
+          'is_healthy': true,
+          'readings_count': 6,
+          'avg_vibration': 2.30,
+          'max_vibration': 2.35,
+          'limit_vibration': 4.0,
+          'avg_temp': 55.5,
+          'max_temp': 56.4,
+          'limit_temp': 75.0,
+          'is_stable': true,
+          'checks': {
+            'physical_repair_completed': true,
+            'telemetry_nominal': true,
+            'stability_confirmed': true,
+            'authorized_signoff': false,
+          },
+        },
+      };
+
+      final response = ExecutionDetailResponse.fromJson(detailJson);
+      expect(response.ticket.ticketNumber, 'MNT-20261012104734-3F03');
+      expect(response.ticket.status, 'AWAITING_VERIFICATION');
+      expect(response.verificationEvaluation.isHealthy, true);
+      expect(response.verificationEvaluation.outcome, 'AWAITING_AUTHORIZED_SIGNOFF');
+      expect(response.verificationEvaluation.maxVibration, 2.35);
+      expect(response.sparePartsCatalog.first['current_stock'], '11.00');
+    });
   });
 }

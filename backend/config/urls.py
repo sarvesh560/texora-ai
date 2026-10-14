@@ -10,6 +10,7 @@ urlpatterns = [
     path("api/v1/", include("apps.core.urls")),
     path("api/v1/", include("apps.factories.urls")),
     path("api/v1/", include("apps.machines.urls")),
+    path("api/v1/production/", include("apps.production.urls")),
     path("api/v1/", include("apps.production.urls")),
     path("api/v1/", include("apps.maintenance.urls")),
     path("api/v1/maintenance/", include("apps.maintenance.urls")),
@@ -22,4 +23,5 @@ urlpatterns = [
     path("api/v1/", include("apps.audit_logs.urls")),
     path("api/v1/", include("apps.simulation.urls")),
     path("api/v1/", include("apps.digital_twin.urls")),
+    path("api/v1/copilot/", include("apps.copilot.urls")),
 ]

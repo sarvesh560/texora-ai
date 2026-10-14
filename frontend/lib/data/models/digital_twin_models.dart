@@ -30,6 +30,8 @@ class DigitalTwinSnapshotModel {
       machineStates: machines,
     );
   }
+
+  String get factoryName => factoryCode;
 }
 
 class MachineTwinModel {

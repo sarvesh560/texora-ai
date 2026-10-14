@@ -156,25 +156,36 @@ class _FactoryFlowViewState extends State<FactoryFlowView>
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.precision_manufacturing_rounded, color: AppColors.primaryBlueLight, size: 16),
-                        const SizedBox(width: 8),
-                        Text(
-                          widget.selectedDepartment == 'ALL'
-                              ? 'Active Assets: All Factory Departments (${widget.snapshot?.totalMachines ?? 25} Units)'
-                              : 'Active Assets: ${_getDepartmentFullName(widget.selectedDepartment)} (${deptGroups[widget.selectedDepartment]?.length ?? 0} Units)',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
+                    Expanded(
+                      child: Row(
+                        children: [
+                          const Icon(Icons.precision_manufacturing_rounded, color: AppColors.primaryBlueLight, size: 16),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              widget.selectedDepartment == 'ALL'
+                                  ? 'Active Assets: All Factory Departments (${widget.snapshot?.totalMachines ?? 25} Units)'
+                                  : 'Active Assets: ${_getDepartmentFullName(widget.selectedDepartment)} (${deptGroups[widget.selectedDepartment]?.length ?? 0} Units)',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                    Text(
-                      'Click any machine to inspect telemetry & limits',
-                      style: TextStyle(color: Colors.white.withAlpha(120), fontSize: 11),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        'Click any machine to inspect telemetry & limits',
+                        style: TextStyle(color: Colors.white.withAlpha(120), fontSize: 11),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ],
                 ),
@@ -329,125 +340,137 @@ class _FactoryFlowViewState extends State<FactoryFlowView>
                     ]
                   : null),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            // Header Row: Dept Code + Badge
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppColors.primaryBlue.withAlpha(40),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          code,
-                          style: const TextStyle(
-                            color: Color(0xFF38BDF8),
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
+        child: LayoutBuilder(
+          builder: (context, cardConstraints) {
+            return FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: cardConstraints.maxWidth,
+                height: math.max(cardConstraints.maxHeight, 115.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Header Row: Dept Code + Badge
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primaryBlue.withAlpha(40),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  code,
+                                  style: const TextStyle(
+                                    color: Color(0xFF38BDF8),
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  name,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          name,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
+                        const SizedBox(width: 6),
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: statusColor,
+                            shape: BoxShape.circle,
                           ),
-                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: statusColor,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ],
-            ),
-
-            // Route Subtitle
-            Text(
-              routeRole,
-              style: const TextStyle(color: Color(0xFF64748B), fontSize: 10),
-            ),
-
-            // Breakdown Chips
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              decoration: BoxDecoration(
-                color: const Color(0xFF0A0F1D),
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: const Color(0xFF1E293B)),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _buildStatPill('Total', '$total', Colors.white),
-                  _buildStatPill('Run', '$running', AppColors.successGreen),
-                  if (warning > 0) _buildStatPill('Warn', '$warning', AppColors.warningOrange),
-                  if (critical > 0) _buildStatPill('Crit', '$critical', AppColors.errorRed),
-                  if (stale > 0 && critical == 0 && warning == 0)
-                    _buildStatPill('Stale', '$stale', const Color(0xFF94A3B8)),
-                ],
-              ),
-            ),
-
-            // Disruption Indicator
-            if (hasDisruption)
-              Row(
-                children: [
-                  const Icon(Icons.warning_rounded, color: AppColors.errorRed, size: 12),
-                  const SizedBox(width: 4),
-                  const Expanded(
-                    child: Text(
-                      'FLOW BOTTLENECK DETECTED',
-                      style: TextStyle(
-                        color: AppColors.errorRed,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.3,
-                      ),
-                      overflow: TextOverflow.ellipsis,
+                      ],
                     ),
-                  ),
-                ],
-              )
-            else
-              Row(
-                children: [
-                  const Icon(Icons.sync_alt_rounded, color: Color(0xFF34D399), size: 12),
-                  const SizedBox(width: 4),
-                  const Expanded(
-                    child: Text(
-                      'FLOW NOMINAL',
-                      style: TextStyle(
-                        color: Color(0xFF34D399),
-                        fontSize: 9,
-                        fontWeight: FontWeight.w700,
-                      ),
-                      overflow: TextOverflow.ellipsis,
+
+                    // Route Subtitle
+                    Text(
+                      routeRole,
+                      style: const TextStyle(color: Color(0xFF64748B), fontSize: 10),
                     ),
-                  ),
-                ],
+
+                    // Breakdown Chips
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0A0F1D),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: const Color(0xFF1E293B)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          _buildStatPill('Total', '$total', Colors.white),
+                          _buildStatPill('Run', '$running', AppColors.successGreen),
+                          if (warning > 0) _buildStatPill('Warn', '$warning', AppColors.warningOrange),
+                          if (critical > 0) _buildStatPill('Crit', '$critical', AppColors.errorRed),
+                          if (stale > 0 && critical == 0 && warning == 0)
+                            _buildStatPill('Stale', '$stale', const Color(0xFF94A3B8)),
+                        ],
+                      ),
+                    ),
+
+                    // Disruption Indicator
+                    if (hasDisruption)
+                      Row(
+                        children: [
+                          const Icon(Icons.warning_rounded, color: AppColors.errorRed, size: 12),
+                          const SizedBox(width: 4),
+                          const Expanded(
+                            child: Text(
+                              'FLOW BOTTLENECK DETECTED',
+                              style: TextStyle(
+                                color: AppColors.errorRed,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.3,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      )
+                    else
+                      Row(
+                        children: [
+                          const Icon(Icons.sync_alt_rounded, color: Color(0xFF34D399), size: 12),
+                          const SizedBox(width: 4),
+                          const Expanded(
+                            child: Text(
+                              'FLOW NOMINAL',
+                              style: TextStyle(
+                                color: Color(0xFF34D399),
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
               ),
-          ],
+            );
+          },
         ),
       ),
     );
@@ -525,14 +548,19 @@ class _FactoryFlowViewState extends State<FactoryFlowView>
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      machine.code,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
+                    Expanded(
+                      child: Text(
+                        machine.code,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
+                    const SizedBox(width: 4),
                     Container(
                       width: 6,
                       height: 6,
@@ -552,14 +580,19 @@ class _FactoryFlowViewState extends State<FactoryFlowView>
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      machine.twinPresentationState,
-                      style: TextStyle(
-                        color: stateColor,
-                        fontSize: 9,
-                        fontWeight: FontWeight.bold,
+                    Expanded(
+                      child: Text(
+                        machine.twinPresentationState,
+                        style: TextStyle(
+                          color: stateColor,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
+                    const SizedBox(width: 4),
                     Text(
                       '${machine.healthScore.toInt()}% Health',
                       style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 9),

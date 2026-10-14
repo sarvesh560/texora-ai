@@ -1,3 +1,5 @@
+import '../../core/utils/numeric_parser.dart';
+
 class ChecklistItem {
   final int stepId;
   final String task;
@@ -17,7 +19,7 @@ class ChecklistItem {
 
   factory ChecklistItem.fromJson(Map<String, dynamic> json) {
     return ChecklistItem(
-      stepId: json['step_id'] as int? ?? 1,
+      stepId: parseIntWithFallback(json['step_id'], 1, fieldName: 'step_id'),
       task: json['task'] as String? ?? '',
       status: json['status'] as String? ?? 'PENDING',
       expectedThreshold: json['expected_threshold'] as String? ?? '',
@@ -59,7 +61,7 @@ class WorkOrderTransitionItem {
 
   factory WorkOrderTransitionItem.fromJson(Map<String, dynamic> json) {
     return WorkOrderTransitionItem(
-      id: json['id'] as int? ?? 0,
+      id: parseIntWithFallback(json['id'], 0, fieldName: 'id'),
       actor: json['actor'] as String? ?? 'Technician',
       actorRole: json['actor_role'] as String? ?? 'Technician',
       previousState: json['previous_state'] as String? ?? '',
@@ -91,14 +93,14 @@ class TelemetryTrendPoint {
 
   factory TelemetryTrendPoint.fromJson(Map<String, dynamic> json) {
     return TelemetryTrendPoint(
-      id: json['id'] as int? ?? 0,
+      id: parseIntWithFallback(json['id'], 0, fieldName: 'id'),
       timestamp: json['timestamp'] != null
           ? DateTime.tryParse(json['timestamp'] as String) ?? DateTime.now()
           : DateTime.now(),
-      vibrationMms: (json['vibration_mms'] as num?)?.toDouble() ?? 0.0,
-      temperatureC: (json['temperature_c'] as num?)?.toDouble() ?? 0.0,
-      speedRpm: (json['speed_rpm'] as num?)?.toDouble() ?? 0.0,
-      powerKw: (json['power_kw'] as num?)?.toDouble() ?? 0.0,
+      vibrationMms: parseDoubleWithFallback(json['vibration_mms'], 0.0, fieldName: 'vibration_mms'),
+      temperatureC: parseDoubleWithFallback(json['temperature_c'], 0.0, fieldName: 'temperature_c'),
+      speedRpm: parseDoubleWithFallback(json['speed_rpm'], 0.0, fieldName: 'speed_rpm'),
+      powerKw: parseDoubleWithFallback(json['power_kw'], 0.0, fieldName: 'power_kw'),
     );
   }
 }
@@ -122,12 +124,12 @@ class MachineOperatingLimitsData {
 
   factory MachineOperatingLimitsData.fromJson(Map<String, dynamic> json) {
     return MachineOperatingLimitsData(
-      warningVibrationMms: (json['warning_vibration_mms'] as num?)?.toDouble() ?? 4.0,
-      maxVibrationMms: (json['max_vibration_mms'] as num?)?.toDouble() ?? 5.5,
-      warningTempC: (json['warning_temp_c'] as num?)?.toDouble() ?? 75.0,
-      maxTempC: (json['max_temp_c'] as num?)?.toDouble() ?? 85.0,
-      minRpm: (json['min_rpm'] as num?)?.toInt() ?? 10000,
-      maxRpm: (json['max_rpm'] as num?)?.toInt() ?? 22000,
+      warningVibrationMms: parseDoubleWithFallback(json['warning_vibration_mms'], 4.0, fieldName: 'warning_vibration_mms'),
+      maxVibrationMms: parseDoubleWithFallback(json['max_vibration_mms'], 5.5, fieldName: 'max_vibration_mms'),
+      warningTempC: parseDoubleWithFallback(json['warning_temp_c'], 75.0, fieldName: 'warning_temp_c'),
+      maxTempC: parseDoubleWithFallback(json['max_temp_c'], 85.0, fieldName: 'max_temp_c'),
+      minRpm: parseIntWithFallback(json['min_rpm'], 10000, fieldName: 'min_rpm'),
+      maxRpm: parseIntWithFallback(json['max_rpm'], 22000, fieldName: 'max_rpm'),
     );
   }
 }
@@ -166,13 +168,13 @@ class VerificationEvaluationData {
       outcome: json['outcome'] as String? ?? 'PENDING_EVIDENCE',
       summary: json['summary'] as String? ?? '',
       isHealthy: json['is_healthy'] as bool? ?? false,
-      readingsCount: (json['readings_count'] as num?)?.toInt() ?? 0,
-      avgVibration: (json['avg_vibration'] as num?)?.toDouble() ?? 0.0,
-      maxVibration: (json['max_vibration'] as num?)?.toDouble() ?? 0.0,
-      limitVibration: (json['limit_vibration'] as num?)?.toDouble() ?? 4.0,
-      avgTemp: (json['avg_temp'] as num?)?.toDouble() ?? 0.0,
-      maxTemp: (json['max_temp'] as num?)?.toDouble() ?? 0.0,
-      limitTemp: (json['limit_temp'] as num?)?.toDouble() ?? 75.0,
+      readingsCount: parseIntWithFallback(json['readings_count'], 0, fieldName: 'readings_count'),
+      avgVibration: parseDoubleWithFallback(json['avg_vibration'], 0.0, fieldName: 'avg_vibration'),
+      maxVibration: parseDoubleWithFallback(json['max_vibration'], 0.0, fieldName: 'max_vibration'),
+      limitVibration: parseDoubleWithFallback(json['limit_vibration'], 4.0, fieldName: 'limit_vibration'),
+      avgTemp: parseDoubleWithFallback(json['avg_temp'], 0.0, fieldName: 'avg_temp'),
+      maxTemp: parseDoubleWithFallback(json['max_temp'], 0.0, fieldName: 'max_temp'),
+      limitTemp: parseDoubleWithFallback(json['limit_temp'], 75.0, fieldName: 'limit_temp'),
       isStable: json['is_stable'] as bool? ?? false,
       checks: json['checks'] is Map ? Map<String, dynamic>.from(json['checks'] as Map) : {},
     );
@@ -276,9 +278,9 @@ class WorkOrderTicket {
         .toList();
 
     return WorkOrderTicket(
-      id: json['id'] as int? ?? 0,
+      id: parseIntWithFallback(json['id'], 0, fieldName: 'id'),
       ticketNumber: json['ticket_number'] as String? ?? '',
-      machineId: json['machine'] as int? ?? 0,
+      machineId: parseIntWithFallback(json['machine'], 0, fieldName: 'machine'),
       machineCode: json['machine_code'] as String? ?? 'MACH-01',
       machineName: json['machine_name'] as String? ?? '',
       machineTypeName: json['machine_type_name'] as String? ?? 'Industrial Loom',
@@ -292,9 +294,9 @@ class WorkOrderTicket {
       assignedTechnician: json['assigned_technician'] as String? ?? 'Mechanical Team',
       createdByAgent: json['created_by_agent'] as String? ?? '',
       rootCause: json['root_cause'] as String? ?? '',
-      partsCost: (json['parts_cost'] as num?)?.toDouble() ?? 0.0,
-      laborHours: (json['labor_hours'] as num?)?.toDouble() ?? 0.0,
-      actualRepairDurationMinutes: (json['actual_repair_duration_minutes'] as num?)?.toInt() ?? 0,
+      partsCost: parseDoubleWithFallback(json['parts_cost'], 0.0, fieldName: 'parts_cost'),
+      laborHours: parseDoubleWithFallback(json['labor_hours'], 0.0, fieldName: 'labor_hours'),
+      actualRepairDurationMinutes: parseIntWithFallback(json['actual_repair_duration_minutes'], 0, fieldName: 'actual_repair_duration_minutes'),
       aiSuspectedCauses: causes,
       inspectionChecklist: checklist,
       confirmedFault: json['confirmed_fault'] as String? ?? '',

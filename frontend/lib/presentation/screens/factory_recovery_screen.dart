@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/theme/texora_design_system.dart';
 import '../../data/services/api_service.dart';
 import '../../data/models/recovery_models.dart';
 import '../widgets/status_badge.dart';
@@ -204,16 +205,16 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Scaffold(
-        backgroundColor: AppColors.backgroundDark,
+        backgroundColor: TexoraColors.workspaceBg,
         body: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              CircularProgressIndicator(color: AppColors.primaryBlue),
+              CircularProgressIndicator(color: TexoraColors.primaryBlue),
               SizedBox(height: 16),
               Text(
                 'Correlating Multi-Agent Recovery Plans...',
-                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+                style: TextStyle(color: TexoraColors.textSecondary, fontSize: 13),
               ),
             ],
           ),
@@ -223,17 +224,17 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
 
     if (_errorMessage.isNotEmpty) {
       return Scaffold(
-        backgroundColor: AppColors.backgroundDark,
+        backgroundColor: TexoraColors.workspaceBg,
         body: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline_rounded, color: AppColors.errorRed, size: 48),
+              const Icon(Icons.error_outline_rounded, color: TexoraColors.criticalText, size: 48),
               const SizedBox(height: 16),
-              Text(_errorMessage, style: const TextStyle(color: Colors.white, fontSize: 14)),
+              Text(_errorMessage, style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 14)),
               const SizedBox(height: 16),
               ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryBlue),
+                style: ElevatedButton.styleFrom(backgroundColor: TexoraColors.primaryBlue),
                 onPressed: _loadRecoveryData,
                 icon: const Icon(Icons.refresh, color: Colors.white),
                 label: const Text('Retry Connection', style: TextStyle(color: Colors.white)),
@@ -245,7 +246,7 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
     }
 
     return Scaffold(
-      backgroundColor: AppColors.backgroundDark,
+      backgroundColor: TexoraColors.workspaceBg,
       body: Column(
         children: [
           // Top Bar
@@ -262,8 +263,8 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
                 Container(
                   width: 360,
                   decoration: const BoxDecoration(
-                    color: Color(0xFF0F172A),
-                    border: Border(right: BorderSide(color: Color(0xFF1E293B))),
+                    color: TexoraColors.cardBg,
+                    border: Border(right: BorderSide(color: TexoraColors.cardBorder)),
                   ),
                   child: _buildCasesListPane(),
                 ),
@@ -274,7 +275,7 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
                       ? const Center(
                           child: Text(
                             'Select a recovery case to view coordinated action plans and RBAC gates',
-                            style: TextStyle(color: Color(0xFF64748B), fontSize: 14),
+                            style: TextStyle(color: TexoraColors.textSecondary, fontSize: 14),
                           ),
                         )
                       : _buildCaseDetailPane(),
@@ -291,8 +292,8 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       decoration: const BoxDecoration(
-        color: AppColors.cardBackgroundDark,
-        border: Border(bottom: BorderSide(color: Color(0xFF1E293B))),
+        color: TexoraColors.cardBg,
+        border: Border(bottom: BorderSide(color: TexoraColors.cardBorder)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -302,7 +303,7 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: AppColors.accentPurple.withAlpha(51),
+                  color: AppColors.accentPurple.withAlpha(25),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Icon(Icons.build_circle_rounded, color: AppColors.accentPurple, size: 24),
@@ -313,11 +314,11 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
                 children: [
                   Text(
                     'Factory Recovery Command Center',
-                    style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                    style: TextStyle(color: TexoraColors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   Text(
                     'Multi-Agent Maintenance, Inventory & Production Recovery Coordination',
-                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                    style: TextStyle(color: TexoraColors.textSecondary, fontSize: 12),
                   ),
                 ],
               ),
@@ -459,10 +460,10 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
                         margin: const EdgeInsets.only(bottom: 10),
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
-                          color: isSelected ? const Color(0xFF1E293B) : AppColors.cardBackgroundDark,
+                          color: isSelected ? const Color(0xFFEFF6FF) : TexoraColors.cardBg,
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(
-                            color: isSelected ? AppColors.primaryBlue : const Color(0xFF334155),
+                            color: isSelected ? TexoraColors.primaryBlue : TexoraColors.cardBorder,
                             width: isSelected ? 1.5 : 1,
                           ),
                         ),
@@ -475,7 +476,7 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
                                 Text(
                                   item.caseCode,
                                   style: const TextStyle(
-                                    color: Colors.white,
+                                    color: TexoraColors.textPrimary,
                                     fontSize: 13,
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -486,11 +487,11 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
                             const SizedBox(height: 6),
                             Row(
                               children: [
-                                const Icon(Icons.precision_manufacturing_rounded, size: 14, color: Color(0xFF94A3B8)),
+                                const Icon(Icons.precision_manufacturing_rounded, size: 14, color: TexoraColors.textSecondary),
                                 const SizedBox(width: 6),
                                 Text(
                                   '${item.machineCode} — ${item.departmentName}',
-                                  style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 12),
+                                  style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 12),
                                 ),
                               ],
                             ),
@@ -502,8 +503,8 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
                                     color: item.priority == 'CRITICAL'
-                                        ? AppColors.errorRed.withAlpha(51)
-                                        : AppColors.primaryBlue.withAlpha(51),
+                                        ? AppColors.errorRed.withAlpha(25)
+                                        : AppColors.primaryBlue.withAlpha(25),
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                   child: Text(
@@ -542,10 +543,10 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
   Widget _buildFilterChip(String statusKey, String label) {
     final isSelected = _filterStatus == statusKey;
     return ChoiceChip(
-      label: Text(label, style: TextStyle(fontSize: 11, color: isSelected ? Colors.white : const Color(0xFF94A3B8))),
+      label: Text(label, style: TextStyle(fontSize: 11, color: isSelected ? Colors.white : TexoraColors.textSecondary)),
       selected: isSelected,
-      selectedColor: AppColors.primaryBlue,
-      backgroundColor: const Color(0xFF1E293B),
+      selectedColor: TexoraColors.primaryBlue,
+      backgroundColor: TexoraColors.inputBg,
       onSelected: (selected) {
         if (selected) {
           setState(() {
@@ -565,8 +566,8 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
         Container(
           padding: const EdgeInsets.all(20),
           decoration: const BoxDecoration(
-            color: Color(0xFF1E293B),
-            border: Border(bottom: BorderSide(color: Color(0xFF334155))),
+            color: TexoraColors.cardBg,
+            border: Border(bottom: BorderSide(color: TexoraColors.cardBorder)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -579,9 +580,9 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: AppColors.primaryBlue.withAlpha(51),
+                          color: AppColors.primaryBlue.withAlpha(25),
                           borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: AppColors.primaryBlue.withAlpha(102)),
+                          border: Border.all(color: AppColors.primaryBlue.withAlpha(60)),
                         ),
                         child: Text(
                           c.caseCode,
@@ -591,7 +592,7 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
                       const SizedBox(width: 12),
                       Text(
                         '${c.machineCode} (${c.machineName})',
-                        style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                        style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
@@ -601,7 +602,7 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
               const SizedBox(height: 10),
               Text(
                 c.incidentSummary.isNotEmpty ? c.incidentSummary : c.summary,
-                style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 13),
+                style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 13),
               ),
               const SizedBox(height: 12),
               Row(
@@ -619,12 +620,12 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
 
         // Tabs Header
         Container(
-          color: AppColors.cardBackgroundDark,
+          color: TexoraColors.cardBg,
           child: TabBar(
             controller: _tabController,
-            indicatorColor: AppColors.primaryBlue,
-            labelColor: Colors.white,
-            unselectedLabelColor: const Color(0xFF94A3B8),
+            indicatorColor: TexoraColors.primaryBlue,
+            labelColor: TexoraColors.primaryBlue,
+            unselectedLabelColor: TexoraColors.textSecondary,
             labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
             tabs: const [
               Tab(icon: Icon(Icons.timeline_rounded, size: 16), text: 'Recovery Plan Timeline'),
@@ -653,16 +654,16 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
+        color: TexoraColors.inputBg,
         borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: const Color(0xFF334155)),
+        border: Border.all(color: TexoraColors.cardBorder),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 12, color: const Color(0xFF94A3B8)),
+          Icon(icon, size: 12, color: TexoraColors.textSecondary),
           const SizedBox(width: 4),
-          Text(text, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+          Text(text, style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 11)),
         ],
       ),
     );
@@ -671,7 +672,7 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
   Widget _buildTimelineTab(RecoveryCaseModel c) {
     if (c.steps.isEmpty) {
       return const Center(
-        child: Text('No recovery steps registered in plan.', style: TextStyle(color: Color(0xFF64748B))),
+        child: Text('No recovery steps registered in plan.', style: TextStyle(color: TexoraColors.textSecondary)),
       );
     }
 
@@ -695,7 +696,7 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
                   decoration: BoxDecoration(
                     color: isCompleted
                         ? AppColors.successGreen
-                        : (isAwaiting ? Colors.amber : const Color(0xFF334155)),
+                        : (isAwaiting ? Colors.amber : TexoraColors.cardBorder),
                     shape: BoxShape.circle,
                   ),
                   child: Center(
@@ -711,7 +712,7 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
                   Container(
                     width: 2,
                     height: 90,
-                    color: const Color(0xFF334155),
+                    color: TexoraColors.cardBorder,
                   ),
               ],
             ),
@@ -724,10 +725,10 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
                 margin: const EdgeInsets.only(bottom: 20),
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: AppColors.cardBackgroundDark,
+                  color: TexoraColors.cardBg,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                    color: isAwaiting ? Colors.amber.withAlpha(128) : const Color(0xFF334155),
+                    color: isAwaiting ? Colors.amber : TexoraColors.cardBorder,
                   ),
                 ),
                 child: Column(
@@ -741,7 +742,7 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
-                                color: _getAgentColor(step.agentType).withAlpha(51),
+                                color: _getAgentColor(step.agentType).withAlpha(25),
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(
@@ -757,7 +758,7 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
                             Text(
                               step.title,
                               style: const TextStyle(
-                                color: Colors.white,
+                                color: TexoraColors.textPrimary,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 13,
                               ),
@@ -770,7 +771,7 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
                     const SizedBox(height: 8),
                     Text(
                       step.description,
-                      style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 12),
+                      style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 12),
                     ),
                     const SizedBox(height: 10),
                     Row(
@@ -779,12 +780,12 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF1E293B),
+                              color: TexoraColors.inputBg,
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
                               'Prerequisites: Step ${step.dependencies.join(', ')}',
-                              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
+                              style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 10),
                             ),
                           ),
                         const Spacer(),
@@ -878,9 +879,9 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.cardBackgroundDark,
+        color: TexoraColors.cardBg,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFF334155)),
+        border: Border.all(color: TexoraColors.cardBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -889,12 +890,12 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
             children: [
               Icon(icon, color: _getAgentColor(agent), size: 18),
               const SizedBox(width: 8),
-              Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+              Text(title, style: const TextStyle(color: TexoraColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
               const Spacer(),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: _getAgentColor(agent).withAlpha(51),
+                  color: _getAgentColor(agent).withAlpha(25),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
@@ -905,7 +906,7 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
             ],
           ),
           const SizedBox(height: 12),
-          const Divider(height: 1, color: Color(0xFF1E293B)),
+          const Divider(height: 1, color: TexoraColors.cardBorder),
           const SizedBox(height: 12),
           ...content,
         ],
@@ -921,10 +922,10 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
         children: [
           SizedBox(
             width: 170,
-            child: Text(label, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+            child: Text(label, style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 12)),
           ),
           Expanded(
-            child: Text(value, style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 12, fontWeight: FontWeight.w500)),
+            child: Text(value, style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 12, fontWeight: FontWeight.w500)),
           ),
         ],
       ),
@@ -942,18 +943,18 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: const Color(0xFF1E293B),
+            color: TexoraColors.cardBg,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: const Color(0xFF334155)),
+            border: Border.all(color: TexoraColors.cardBorder),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Row(
                 children: [
-                  Icon(Icons.security_rounded, color: AppColors.primaryBlue, size: 18),
+                  Icon(Icons.security_rounded, color: TexoraColors.primaryBlue, size: 18),
                   SizedBox(width: 8),
-                  Text('Manager Authorization & Role Context', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                  Text('Manager Authorization & Role Context', style: TextStyle(color: TexoraColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
                 ],
               ),
               const SizedBox(height: 12),
@@ -963,18 +964,19 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Sign-Off Role (RBAC)', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                        const Text('Sign-Off Role (RBAC)', style: TextStyle(color: TexoraColors.textSecondary, fontSize: 11)),
                         const SizedBox(height: 4),
                         DropdownButtonFormField<String>(
                           initialValue: _selectedRole,
-                          dropdownColor: const Color(0xFF1E293B),
+                          dropdownColor: TexoraColors.cardBg,
                           decoration: InputDecoration(
                             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                             filled: true,
-                            fillColor: AppColors.cardBackgroundDark,
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+                            fillColor: TexoraColors.inputBg,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: TexoraColors.cardBorder)),
+                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: TexoraColors.cardBorder)),
                           ),
-                          style: const TextStyle(color: Colors.white, fontSize: 12),
+                          style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 12),
                           items: _managerRoles.map((role) {
                             return DropdownMenuItem(value: role, child: Text(role));
                           }).toList(),
@@ -990,16 +992,17 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Manager Identity / Name', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                        const Text('Manager Identity / Name', style: TextStyle(color: TexoraColors.textSecondary, fontSize: 11)),
                         const SizedBox(height: 4),
                         TextField(
                           controller: _managerNameController,
-                          style: const TextStyle(color: Colors.white, fontSize: 12),
+                          style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 12),
                           decoration: InputDecoration(
                             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                             filled: true,
-                            fillColor: AppColors.cardBackgroundDark,
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+                            fillColor: TexoraColors.inputBg,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: TexoraColors.cardBorder)),
+                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: TexoraColors.cardBorder)),
                           ),
                         ),
                       ],
@@ -1015,7 +1018,7 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
 
         const Text(
           'Pending Approval Gates (Action Required)',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+          style: TextStyle(color: TexoraColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
         ),
         const SizedBox(height: 10),
 
@@ -1023,9 +1026,9 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: AppColors.cardBackgroundDark,
+              color: TexoraColors.cardBg,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFF334155)),
+              border: Border.all(color: TexoraColors.cardBorder),
             ),
             child: const Row(
               children: [
@@ -1034,7 +1037,7 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
                 Expanded(
                   child: Text(
                     'No pending manager approvals for this case. All required action gates are signed off.',
-                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+                    style: TextStyle(color: TexoraColors.textSecondary, fontSize: 13),
                   ),
                 ),
               ],
@@ -1046,9 +1049,9 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
               margin: const EdgeInsets.only(bottom: 14),
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppColors.cardBackgroundDark,
+                color: TexoraColors.cardBg,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.amber.withAlpha(128)),
+                border: Border.all(color: Colors.amber),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1063,7 +1066,7 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                         decoration: BoxDecoration(
-                          color: AppColors.errorRed.withAlpha(51),
+                          color: AppColors.errorRed.withAlpha(25),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: const Text('HIGH RISK GATE', style: TextStyle(color: AppColors.errorRed, fontSize: 10, fontWeight: FontWeight.bold)),
@@ -1073,12 +1076,12 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
                   const SizedBox(height: 8),
                   Text(
                     step.title,
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                    style: const TextStyle(color: TexoraColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     step.description,
-                    style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 12),
+                    style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 12),
                   ),
                   const SizedBox(height: 14),
                   Row(
@@ -1123,7 +1126,7 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
           const SizedBox(height: 24),
           const Text(
             'Authorized Action Gates & Audit Sign-Off History',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+            style: TextStyle(color: TexoraColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
           ),
           const SizedBox(height: 10),
           ...authorizedSteps.map((step) {
@@ -1131,9 +1134,9 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
               margin: const EdgeInsets.only(bottom: 12),
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFF0F172A),
+                color: TexoraColors.cardBg,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFF334155)),
+                border: Border.all(color: TexoraColors.cardBorder),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1147,7 +1150,7 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
                           const SizedBox(width: 8),
                           Text(
                             step.approvalCode ?? 'APR-RECORD',
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                            style: const TextStyle(color: TexoraColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
                           ),
                         ],
                       ),
@@ -1157,19 +1160,19 @@ class _FactoryRecoveryScreenState extends State<FactoryRecoveryScreen> with Sing
                   const SizedBox(height: 6),
                   Text(
                     step.title,
-                    style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 12, fontWeight: FontWeight.w600),
+                    style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w600),
                   ),
                   if (step.outputPayload.isNotEmpty) ...[
                     const SizedBox(height: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF1E293B),
+                        color: TexoraColors.inputBg,
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
                         'Execution Output: ${step.outputPayload.toString()}',
-                        style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontFamily: 'monospace'),
+                        style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 11, fontFamily: 'monospace'),
                       ),
                     ),
                   ],

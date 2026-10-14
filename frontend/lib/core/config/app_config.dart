@@ -7,7 +7,6 @@ class AppConfig {
   );
 
   static String baseUrl = defaultBaseUrl;
-
   static const String appName = 'Texora AI';
   static const String appTagline = 'Autonomous Textile Factory Operations';
   static const String appVersion = '1.0.0 (Phase 1 Foundation)';

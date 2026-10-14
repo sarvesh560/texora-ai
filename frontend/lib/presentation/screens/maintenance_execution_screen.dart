@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import '../../core/theme/texora_design_system.dart';
 import '../../data/services/api_service.dart';
 import '../../data/models/work_order_models.dart';
+import '../../core/utils/numeric_parser.dart';
 
 class MaintenanceExecutionScreen extends StatefulWidget {
   final Function(int, {String? targetMachine})? onNavigate;
@@ -94,15 +96,15 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
         });
 
         if (list.isNotEmpty) {
-          int targetId = list.first['id'] as int;
+          int targetId = parseIntWithFallback(list.first['id'], 0);
           if (widget.initialTicketNumber != null) {
             final match = list.firstWhere(
               (t) => t['ticket_number'] == widget.initialTicketNumber,
               orElse: () => list.first,
             );
-            targetId = match['id'] as int;
+            targetId = parseIntWithFallback(match['id'], 0);
           } else if (_selectedTicketId != null) {
-            final exists = list.any((t) => t['id'] == _selectedTicketId);
+            final exists = list.any((t) => parseIntWithFallback(t['id'], 0) == _selectedTicketId);
             if (exists) targetId = _selectedTicketId!;
           }
           _selectTicket(targetId);
@@ -127,25 +129,37 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
     setState(() {
       _selectedTicketId = ticketId;
       _isLoadingDetail = true;
-      _actionFeedback = null;
+      _errorMessage = null;
     });
 
     try {
-      final data = await _apiService.fetchWorkOrderExecutionDetail(ticketId);
+      final jsonMap = await _apiService.fetchWorkOrderExecutionDetail(ticketId);
       if (mounted) {
-        if (data != null) {
-          final detail = ExecutionDetailResponse.fromJson(data);
+        if (jsonMap != null) {
+          final detail = ExecutionDetailResponse.fromJson(jsonMap);
           setState(() {
             _executionDetail = detail;
+            _isLoadingDetail = false;
+
+            // Pre-populate fields
             _confirmedFaultController.text = detail.ticket.confirmedFault;
             _faultNotesController.text = detail.ticket.faultConfirmationNotes;
             _repairPerformedController.text = detail.ticket.repairPerformed;
             if (detail.ticket.actualRepairDurationMinutes > 0) {
               _repairDurationController.text = detail.ticket.actualRepairDurationMinutes.toString();
             }
-            _remainingIssuesController.text = detail.ticket.remainingIssues;
-            _isLoadingDetail = false;
+            if (detail.sparePartsCatalog.isNotEmpty && _selectedPartCode == null) {
+              _selectedPartCode = detail.sparePartsCatalog.first['item_code'] as String?;
+            }
           });
+
+          // Sync tab with lifecycle state
+          final status = detail.ticket.status;
+          if (status == 'AWAITING_VERIFICATION' || status == 'VERIFIED') {
+            _tabController.animateTo(2); // Go to verification tab
+          } else if (status == 'REPAIR_IN_PROGRESS') {
+            _tabController.animateTo(1); // Go to repair tab
+          }
         } else {
           setState(() {
             _isLoadingDetail = false;
@@ -187,6 +201,12 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
   // Inspection submit handler
   Future<void> _submitInspection() async {
     if (_selectedTicketId == null || _executionDetail == null) return;
+    final ticket = _executionDetail?.ticket;
+    if (ticket != null && (ticket.status == 'AWAITING_VERIFICATION' || ticket.status == 'VERIFIED' || ticket.status == 'CLOSED')) {
+      _showFeedback('Diagnostic inspection is already completed for ${ticket.ticketNumber} (${ticket.status}).', false);
+      return;
+    }
+
     final fault = _confirmedFaultController.text.trim();
     if (fault.isEmpty) {
       _showFeedback('Please record the confirmed physical fault before proceeding.', false);
@@ -223,6 +243,12 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
       return;
     }
 
+    final ticket = _executionDetail?.ticket;
+    if (ticket != null && (ticket.status == 'AWAITING_VERIFICATION' || ticket.status == 'VERIFIED' || ticket.status == 'CLOSED')) {
+      _showFeedback('Cannot deduct parts: Physical repair is already completed for ${ticket.ticketNumber}.', false);
+      return;
+    }
+
     final qty = int.tryParse(_partQuantityController.text) ?? 1;
     setState(() => _isLoadingDetail = true);
 
@@ -237,32 +263,29 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
     if (res.containsKey('error')) {
       _showFeedback(res['error'].toString(), false);
     } else {
-      _showFeedback('Authorized spare part deduction recorded in inventory ledger.', true);
+      _showFeedback('Spare part safely deducted from inventory.', true);
+      await _loadTickets();
       await _selectTicket(_selectedTicketId!);
     }
     setState(() => _isLoadingDetail = false);
   }
 
-  // Repair completion handler
+  // Physical repair completion handler
   Future<void> _completeRepair() async {
     if (_selectedTicketId == null) return;
-    final work = _repairPerformedController.text.trim();
-    final dur = int.tryParse(_repairDurationController.text) ?? 0;
-
-    if (work.length < 10) {
-      _showFeedback('Please provide a complete description of the repair performed (min 10 chars).', false);
-      return;
-    }
-    if (dur <= 0) {
-      _showFeedback('Please specify positive actual repair duration in minutes.', false);
+    final action = _repairPerformedController.text.trim();
+    if (action.isEmpty) {
+      _showFeedback('Please describe the repair work carried out before completing.', false);
       return;
     }
 
+    final duration = int.tryParse(_repairDurationController.text) ?? 45;
     setState(() => _isLoadingDetail = true);
+
     final res = await _apiService.completeWorkOrderRepair(
       _selectedTicketId!,
-      repairPerformed: work,
-      durationMinutes: dur,
+      repairPerformed: action,
+      durationMinutes: duration,
       remainingIssues: _remainingIssuesController.text.trim(),
       actor: 'R. Sharma (Senior Diagnostic Tech)',
     );
@@ -270,14 +293,15 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
     if (res.containsKey('error')) {
       _showFeedback(res['error'].toString(), false);
     } else {
-      _showFeedback('Repair documented. Work order moved to Awaiting Verification.', true);
+      _showFeedback('Physical repair documented. Machine entered telemetry verification window.', true);
       _tabController.animateTo(2);
       await _loadTickets();
+      await _selectTicket(_selectedTicketId!);
     }
     setState(() => _isLoadingDetail = false);
   }
 
-  // Verification evaluation trigger
+  // Live recovery evaluation handler
   Future<void> _evaluateRecovery() async {
     if (_selectedTicketId == null) return;
     setState(() => _isLoadingDetail = true);
@@ -286,47 +310,53 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
     if (res.containsKey('error')) {
       _showFeedback(res['error'].toString(), false);
     } else {
-      _showFeedback('Recovery Verification Engine evaluated post-repair sensor data.', true);
+      final outcome = res['outcome'] as String? ?? 'EVALUATED';
+      _showFeedback('Telemetry evaluated: $outcome', true);
+      await _loadTickets();
       await _selectTicket(_selectedTicketId!);
     }
     setState(() => _isLoadingDetail = false);
   }
 
-  // Authorized return to service sign-off
+  // Authorized signoff handler
   Future<void> _authorizeReturnToService() async {
     if (_selectedTicketId == null) return;
     final user = _signoffUserController.text.trim();
     if (user.isEmpty) {
-      _showFeedback('Authorized personnel name is required.', false);
+      _showFeedback('Please provide the authorized personnel name.', false);
       return;
     }
 
     setState(() => _isLoadingDetail = true);
+
     final res = await _apiService.authorizeReturnToService(
       _selectedTicketId!,
       authorizedBy: user,
-      role: 'Plant Operations Manager',
       notes: _signoffNotesController.text.trim(),
     );
 
     if (res.containsKey('error')) {
       _showFeedback(res['error'].toString(), false);
     } else {
-      _showFeedback('Safe return to service signed off. Machine operational.', true);
+      _showFeedback('Machine verified and authorized to return to service.', true);
       await _loadTickets();
+      await _selectTicket(_selectedTicketId!);
     }
     setState(() => _isLoadingDetail = false);
   }
 
-  // Close incident with evidence
+  // Evidence-based incident closure
   Future<void> _closeWithEvidence() async {
     if (_selectedTicketId == null) return;
     setState(() => _isLoadingDetail = true);
 
-    final res = await _apiService.closeWorkOrderWithEvidence(
+    final res = await _apiService.transitionWorkOrder(
       _selectedTicketId!,
-      closedBy: _signoffUserController.text.trim(),
-      notes: 'Closed following full verification lifecycle.',
+      newState: 'CLOSED',
+      actor: _signoffUserController.text.trim().isNotEmpty
+          ? _signoffUserController.text.trim()
+          : 'Plant Operations Manager',
+      reason: 'Closed following full verification lifecycle.',
     );
 
     if (res.containsKey('error')) {
@@ -341,15 +371,26 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
   // Demo simulation runner
   Future<void> _runDemoFlow(String mode) async {
     if (_selectedTicketId == null) return;
+    final ticket = _executionDetail?.ticket;
+    if (ticket != null && (ticket.status == 'CLOSED' || ticket.status == 'CANCELLED')) {
+      _showFeedback('Action unavailable: Work order ${ticket.ticketNumber} is ${ticket.status}.', false);
+      return;
+    }
+
     setState(() => _isLoadingDetail = true);
 
     final res = await _apiService.simulateTechnicianFlow(_selectedTicketId!, mode: mode);
     if (res.containsKey('error')) {
       _showFeedback(res['error'].toString(), false);
     } else {
-      _showFeedback('Simulated technician flow executed ($mode). Post-repair telemetry generated.', true);
+      final isAwaiting = ticket?.status == 'AWAITING_VERIFICATION';
+      final msg = isAwaiting
+          ? 'Post-repair sensor data simulated ($mode). Evaluated by Recovery Verification Engine.'
+          : 'Simulated technician flow executed ($mode). Post-repair telemetry generated.';
+      _showFeedback(msg, true);
       _tabController.animateTo(2);
       await _loadTickets();
+      await _selectTicket(_selectedTicketId!);
     }
     setState(() => _isLoadingDetail = false);
   }
@@ -365,7 +406,7 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0F1D),
+      backgroundColor: TexoraColors.workspaceBg,
       body: Column(
         children: [
           _buildTopHeader(),
@@ -380,7 +421,7 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
                   width: 360,
                   child: _buildMasterListPanel(),
                 ),
-                Container(width: 1, color: const Color(0xFF1E293B)),
+                Container(width: 1, color: TexoraColors.cardBorder),
                 // Right Panel: Detailed Execution Workspace
                 Expanded(
                   child: _buildExecutionDetailPanel(),
@@ -397,8 +438,8 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       decoration: const BoxDecoration(
-        color: Color(0xFF0F172A),
-        border: Border(bottom: BorderSide(color: Color(0xFF1E293B))),
+        color: TexoraColors.cardBg,
+        border: Border(bottom: BorderSide(color: TexoraColors.cardBorder)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -412,10 +453,11 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
                     colors: [Color(0xFFEA580C), Color(0xFFC2410C)],
                   ),
                   borderRadius: BorderRadius.circular(10),
-                  boxShadow: [
+                  boxShadow: const [
                     BoxShadow(
-                      color: const Color(0xFFEA580C).withAlpha(80),
-                      blurRadius: 10,
+                      color: Color(0x20EA580C),
+                      blurRadius: 8,
+                      offset: Offset(0, 2),
                     ),
                   ],
                 ),
@@ -428,7 +470,7 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
                   Text(
                     'Maintenance Execution Center',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: TexoraColors.textPrimary,
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
                       letterSpacing: -0.3,
@@ -438,7 +480,7 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
                   Text(
                     'AI-Guided Field Repairs • Sensor Verification • Evidence-Based Incident Closure',
                     style: TextStyle(
-                      color: Color(0xFF94A3B8),
+                      color: TexoraColors.textSecondary,
                       fontSize: 12,
                     ),
                   ),
@@ -451,29 +493,19 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
               // Navigation Quick Links
               if (widget.onNavigate != null) ...[
                 OutlinedButton.icon(
-                  onPressed: () => widget.onNavigate!(2), // Incident Intelligence
-                  icon: const Icon(Icons.insights_rounded, size: 14, color: Color(0xFF38BDF8)),
-                  label: const Text('Incidents', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 12)),
+                  onPressed: () => widget.onNavigate!(3), // Incident Intelligence
+                  icon: const Icon(Icons.insights_rounded, size: 14, color: TexoraColors.primary),
+                  label: const Text('Incidents', style: TextStyle(color: TexoraColors.primary, fontSize: 12)),
                   style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Color(0xFF1E293B)),
-                    backgroundColor: const Color(0xFF0F172A),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                OutlinedButton.icon(
-                  onPressed: () => widget.onNavigate!(5), // Approvals
-                  icon: const Icon(Icons.gavel_rounded, size: 14, color: Color(0xFFF59E0B)),
-                  label: const Text('Approvals', style: TextStyle(color: Color(0xFFF59E0B), fontSize: 12)),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Color(0xFF1E293B)),
-                    backgroundColor: const Color(0xFF0F172A),
+                    side: const BorderSide(color: TexoraColors.cardBorder),
+                    backgroundColor: TexoraColors.tableHeaderBg,
                   ),
                 ),
                 const SizedBox(width: 12),
               ],
               IconButton(
                 onPressed: _loadTickets,
-                icon: const Icon(Icons.refresh_rounded, color: Color(0xFF94A3B8)),
+                icon: const Icon(Icons.refresh_rounded, color: TexoraColors.textSecondary),
                 tooltip: 'Refresh Work Orders',
               ),
             ],
@@ -487,25 +519,33 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       color: _actionSuccess
-          ? const Color(0xFF065F46).withAlpha(180)
-          : const Color(0xFF991B1B).withAlpha(180),
+          ? TexoraColors.badgeSuccessBg
+          : TexoraColors.badgeDangerBg,
       child: Row(
         children: [
           Icon(
             _actionSuccess ? Icons.check_circle_rounded : Icons.warning_rounded,
-            color: Colors.white,
+            color: _actionSuccess ? TexoraColors.badgeSuccessText : TexoraColors.badgeDangerText,
             size: 16,
           ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               _actionFeedback!,
-              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
+              style: TextStyle(
+                color: _actionSuccess ? TexoraColors.badgeSuccessText : TexoraColors.badgeDangerText,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
           IconButton(
             onPressed: () => setState(() => _actionFeedback = null),
-            icon: const Icon(Icons.close, color: Colors.white, size: 16),
+            icon: Icon(
+              Icons.close,
+              color: _actionSuccess ? TexoraColors.badgeSuccessText : TexoraColors.badgeDangerText,
+              size: 16,
+            ),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
           ),
@@ -517,15 +557,15 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
   Widget _buildErrorBanner() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-      color: const Color(0xFF7F1D1D),
+      color: TexoraColors.badgeDangerBg,
       child: Row(
         children: [
-          const Icon(Icons.error_outline_rounded, color: Colors.white, size: 16),
+          const Icon(Icons.error_outline_rounded, color: TexoraColors.badgeDangerText, size: 16),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               _errorMessage!,
-              style: const TextStyle(color: Colors.white, fontSize: 12),
+              style: const TextStyle(color: TexoraColors.badgeDangerText, fontSize: 12, fontWeight: FontWeight.w500),
             ),
           ),
         ],
@@ -538,7 +578,7 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
   // -------------------------------------------------------------
   Widget _buildMasterListPanel() {
     return Container(
-      color: const Color(0xFF0F172A),
+      color: TexoraColors.cardBg,
       child: Column(
         children: [
           // Filter & Search Header
@@ -549,14 +589,14 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
                 TextField(
                   controller: _searchController,
                   onSubmitted: (_) => _loadTickets(),
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                  style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 12),
                   decoration: InputDecoration(
                     hintText: 'Search ticket, machine, or fault...',
-                    hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
-                    prefixIcon: const Icon(Icons.search, size: 16, color: Color(0xFF64748B)),
+                    hintStyle: const TextStyle(color: TexoraColors.textMuted, fontSize: 12),
+                    prefixIcon: const Icon(Icons.search, size: 16, color: TexoraColors.textMuted),
                     suffixIcon: _searchController.text.isNotEmpty
                         ? IconButton(
-                            icon: const Icon(Icons.clear, size: 14, color: Color(0xFF64748B)),
+                            icon: const Icon(Icons.clear, size: 14, color: TexoraColors.textMuted),
                             onPressed: () {
                               _searchController.clear();
                               _loadTickets();
@@ -565,10 +605,18 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
                         : null,
                     isDense: true,
                     filled: true,
-                    fillColor: const Color(0xFF1E293B),
+                    fillColor: TexoraColors.workspaceBg,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide.none,
+                      borderSide: const BorderSide(color: TexoraColors.cardBorder),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: TexoraColors.cardBorder),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: TexoraColors.primary),
                     ),
                   ),
                 ),
@@ -591,7 +639,7 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
               ],
             ),
           ),
-          const Divider(color: Color(0xFF1E293B), height: 1),
+          const Divider(color: TexoraColors.cardBorder, height: 1),
           // Ticket items list
           Expanded(
             child: _isLoadingList
@@ -600,7 +648,7 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
                     ? const Center(
                         child: Text(
                           'No maintenance work orders found',
-                          style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                          style: TextStyle(color: TexoraColors.textMuted, fontSize: 13),
                         ),
                       )
                     : ListView.builder(
@@ -622,10 +670,11 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
     return Padding(
       padding: const EdgeInsets.only(right: 6),
       child: ChoiceChip(
-        label: Text(label, style: TextStyle(fontSize: 10, color: active ? Colors.white : const Color(0xFF94A3B8))),
+        label: Text(label, style: TextStyle(fontSize: 10, color: active ? Colors.white : TexoraColors.textSecondary, fontWeight: active ? FontWeight.bold : FontWeight.normal)),
         selected: active,
         selectedColor: const Color(0xFFEA580C),
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: TexoraColors.tableHeaderBg,
+        side: const BorderSide(color: TexoraColors.cardBorder),
         onSelected: (_) {
           setState(() => _statusFilter = value);
           _loadTickets();
@@ -645,17 +694,17 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
     final verStatus = t['verification_status'] as String? ?? 'PENDING_EVIDENCE';
 
     return InkWell(
-      onTap: () => _selectTicket(t['id'] as int),
+      onTap: () => _selectTicket(parseIntWithFallback(t['id'], 0)),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF1E293B).withAlpha(180) : Colors.transparent,
+          color: isSelected ? TexoraColors.badgeInfoBg : Colors.transparent,
           border: Border(
             left: BorderSide(
               color: isSelected ? const Color(0xFFEA580C) : Colors.transparent,
               width: 3,
             ),
-            bottom: const BorderSide(color: Color(0xFF1E293B), width: 0.8),
+            bottom: const BorderSide(color: TexoraColors.cardBorder, width: 0.8),
           ),
         ),
         child: Column(
@@ -667,7 +716,7 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
                 Text(
                   ticketNumber,
                   style: const TextStyle(
-                    color: Colors.white,
+                    color: TexoraColors.textPrimary,
                     fontWeight: FontWeight.bold,
                     fontSize: 12,
                   ),
@@ -681,19 +730,20 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF38BDF8).withAlpha(25),
+                    color: TexoraColors.tableHeaderBg,
                     borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: TexoraColors.cardBorder),
                   ),
                   child: Text(
                     machineCode,
-                    style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.w600),
+                    style: const TextStyle(color: TexoraColors.primary, fontSize: 10, fontWeight: FontWeight.w600),
                   ),
                 ),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
                     t['title'] as String? ?? '',
-                    style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 11),
+                    style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 11),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -711,12 +761,12 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
             const SizedBox(height: 4),
             Row(
               children: [
-                const Icon(Icons.person_outline, size: 12, color: Color(0xFF64748B)),
+                const Icon(Icons.person_outline, size: 12, color: TexoraColors.textMuted),
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(
                     technician,
-                    style: const TextStyle(color: Color(0xFF64748B), fontSize: 10),
+                    style: const TextStyle(color: TexoraColors.textMuted, fontSize: 10),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -740,7 +790,7 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
       return const Center(
         child: Text(
           'Select a work order from the list to begin maintenance execution.',
-          style: TextStyle(color: Color(0xFF64748B), fontSize: 14),
+          style: TextStyle(color: TexoraColors.textMuted, fontSize: 14),
         ),
       );
     }
@@ -753,12 +803,15 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
         _buildLifecycleProgressTimeline(ticket.status),
         // Tabs
         Container(
-          color: const Color(0xFF0F172A),
+          decoration: const BoxDecoration(
+            color: TexoraColors.cardBg,
+            border: Border(bottom: BorderSide(color: TexoraColors.cardBorder)),
+          ),
           child: TabBar(
             controller: _tabController,
             indicatorColor: const Color(0xFFEA580C),
             labelColor: const Color(0xFFEA580C),
-            unselectedLabelColor: const Color(0xFF94A3B8),
+            unselectedLabelColor: TexoraColors.textSecondary,
             labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
             tabs: const [
               Tab(icon: Icon(Icons.checklist_rtl_rounded, size: 16), text: '1. AI Investigation & Checklist'),
@@ -787,8 +840,8 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       decoration: const BoxDecoration(
-        color: Color(0xFF0F172A),
-        border: Border(bottom: BorderSide(color: Color(0xFF1E293B))),
+        color: TexoraColors.cardBg,
+        border: Border(bottom: BorderSide(color: TexoraColors.cardBorder)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -802,7 +855,7 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
                     Text(
                       ticket.ticketNumber,
                       style: const TextStyle(
-                        color: Colors.white,
+                        color: TexoraColors.textPrimary,
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
@@ -816,35 +869,47 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF64748B).withAlpha(40),
+                          color: TexoraColors.tableHeaderBg,
                           borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: const Color(0xFF64748B)),
+                          border: Border.all(color: TexoraColors.cardBorder),
                         ),
-                        child: const Text('DEMO SIMULATION', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 9, fontWeight: FontWeight.bold)),
+                        child: const Text('FIELD SIMULATION VERIFICATION', style: TextStyle(color: TexoraColors.textSecondary, fontSize: 9, fontWeight: FontWeight.bold)),
                       ),
                     ],
                   ],
                 ),
               ),
-              // Controlled Demo Simulation Actions
+              // Controlled Field Simulation Actions
               Row(
                 children: [
                   OutlinedButton.icon(
-                    onPressed: () => _runDemoFlow('HEALTHY'),
+                    onPressed: (ticket.status == 'CLOSED' || ticket.status == 'CANCELLED')
+                        ? null
+                        : () => _runDemoFlow('HEALTHY'),
                     icon: const Icon(Icons.play_arrow_rounded, size: 14, color: Color(0xFF10B981)),
                     label: const Text('Simulate Repair (Healthy)', style: TextStyle(color: Color(0xFF10B981), fontSize: 11)),
                     style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Color(0xFF10B981)),
+                      side: BorderSide(
+                        color: (ticket.status == 'CLOSED' || ticket.status == 'CANCELLED')
+                            ? TexoraColors.cardBorder
+                            : const Color(0xFF10B981),
+                      ),
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     ),
                   ),
                   const SizedBox(width: 8),
                   OutlinedButton.icon(
-                    onPressed: () => _runDemoFlow('FAULTY'),
+                    onPressed: (ticket.status == 'CLOSED' || ticket.status == 'CANCELLED')
+                        ? null
+                        : () => _runDemoFlow('FAULTY'),
                     icon: const Icon(Icons.warning_amber_rounded, size: 14, color: Color(0xFFEF4444)),
                     label: const Text('Simulate Repair (Faulty)', style: TextStyle(color: Color(0xFFEF4444), fontSize: 11)),
                     style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Color(0xFFEF4444)),
+                      side: BorderSide(
+                        color: (ticket.status == 'CLOSED' || ticket.status == 'CANCELLED')
+                            ? TexoraColors.cardBorder
+                            : const Color(0xFFEF4444),
+                      ),
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     ),
                   ),
@@ -857,19 +922,20 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
             children: [
               Text(
                 'Machine: ${ticket.machineCode} — ${ticket.machineName} (${ticket.departmentName})',
-                style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 12),
               ),
               if (ticket.incidentReference.isNotEmpty) ...[
                 const SizedBox(width: 14),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFEF4444).withAlpha(30),
+                    color: TexoraColors.badgeDangerBg,
                     borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: const Color(0xFFFECACA)),
                   ),
                   child: Text(
                     'Incident: ${ticket.incidentReference}',
-                    style: const TextStyle(color: Color(0xFFEF4444), fontSize: 10, fontWeight: FontWeight.w600),
+                    style: const TextStyle(color: TexoraColors.badgeDangerText, fontSize: 10, fontWeight: FontWeight.w600),
                   ),
                 ),
               ],
@@ -902,7 +968,10 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-      color: const Color(0xFF0A0F1D),
+      decoration: const BoxDecoration(
+        color: TexoraColors.cardBg,
+        border: Border(bottom: BorderSide(color: TexoraColors.cardBorder)),
+      ),
       child: Row(
         children: List.generate(stages.length, (idx) {
           final isPast = idx < currentIndex;
@@ -922,7 +991,7 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
                               ? const Color(0xFF10B981)
                               : isCurrent
                                   ? const Color(0xFFEA580C)
-                                  : const Color(0xFF1E293B),
+                                  : TexoraColors.cardBorder,
                           borderRadius: BorderRadius.circular(3),
                         ),
                       ),
@@ -935,7 +1004,7 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
                               ? const Color(0xFFEA580C)
                               : isPast
                                   ? const Color(0xFF10B981)
-                                  : const Color(0xFF64748B),
+                                  : TexoraColors.textMuted,
                           fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
                         ),
                         maxLines: 1,
@@ -990,21 +1059,24 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFF0F172A),
+              color: TexoraColors.cardBg,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFF8B5CF6).withAlpha(80)),
+              border: Border.all(color: const Color(0xFFDDD6FE)),
+              boxShadow: const [
+                BoxShadow(color: Color(0x06000000), blurRadius: 4, offset: Offset(0, 2)),
+              ],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Row(
                   children: [
-                    Icon(Icons.psychology_rounded, color: Color(0xFFA78BFA), size: 18),
+                    Icon(Icons.psychology_rounded, color: Color(0xFF7C3AED), size: 18),
                     SizedBox(width: 8),
                     Text(
                       'AI Health Specialist Investigation (Potential Causes)',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: TexoraColors.textPrimary,
                         fontSize: 13,
                         fontWeight: FontWeight.bold,
                       ),
@@ -1012,7 +1084,7 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
                     Spacer(),
                     Text(
                       'DIAGNOSTIC HYPOTHESES — TECHNICIAN CONFIRMATION REQUIRED',
-                      style: TextStyle(color: Color(0xFFA78BFA), fontSize: 9, fontWeight: FontWeight.bold),
+                      style: TextStyle(color: Color(0xFF7C3AED), fontSize: 9, fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
@@ -1020,7 +1092,7 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
                 const Text(
                   'The AI specialist analyzed telemetry frequency patterns and identified the following potential causes. '
                   'These are hypotheses, not confirmed diagnoses. Technicians must conduct physical inspection to confirm the actual root cause.',
-                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                  style: TextStyle(color: TexoraColors.textSecondary, fontSize: 11),
                 ),
                 const SizedBox(height: 12),
                 Wrap(
@@ -1032,21 +1104,21 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
                     return Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF1E293B),
+                        color: TexoraColors.tableHeaderBg,
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: const Color(0xFF334155)),
+                        border: Border.all(color: TexoraColors.cardBorder),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(Icons.bubble_chart_outlined, size: 12, color: _likelihoodColor(likelihood)),
                           const SizedBox(width: 6),
-                          Text(name, style: const TextStyle(color: Colors.white, fontSize: 11)),
+                          Text(name, style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 11)),
                           const SizedBox(width: 6),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                             decoration: BoxDecoration(
-                              color: _likelihoodColor(likelihood).withAlpha(40),
+                              color: _likelihoodColor(likelihood).withAlpha(30),
                               borderRadius: BorderRadius.circular(3),
                             ),
                             child: Text(
@@ -1067,26 +1139,26 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
           // Guided Inspection Checklist
           const Text(
             'Technician Guided Inspection Checklist',
-            style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+            style: TextStyle(color: TexoraColors.textPrimary, fontSize: 14, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 4),
           const Text(
             'Conduct physical checks and record measured values before disassembly.',
-            style: TextStyle(color: Color(0xFF64748B), fontSize: 11),
+            style: TextStyle(color: TexoraColors.textMuted, fontSize: 11),
           ),
           const SizedBox(height: 12),
 
           Container(
             decoration: BoxDecoration(
-              color: const Color(0xFF0F172A),
+              color: TexoraColors.cardBg,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFF1E293B)),
+              border: Border.all(color: TexoraColors.cardBorder),
             ),
             child: ListView.separated(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: ticket.inspectionChecklist.length,
-              separatorBuilder: (_, _) => const Divider(color: Color(0xFF1E293B), height: 1),
+              separatorBuilder: (_, _) => const Divider(color: TexoraColors.cardBorder, height: 1),
               itemBuilder: (context, idx) {
                 final item = ticket.inspectionChecklist[idx];
                 return Padding(
@@ -1096,18 +1168,18 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
                     children: [
                       CircleAvatar(
                         radius: 12,
-                        backgroundColor: const Color(0xFF1E293B),
-                        child: Text('${item.stepId}', style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold)),
+                        backgroundColor: TexoraColors.tableHeaderBg,
+                        child: Text('${item.stepId}', style: const TextStyle(color: TexoraColors.primary, fontSize: 10, fontWeight: FontWeight.bold)),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(item.task, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500)),
+                            Text(item.task, style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 12, fontWeight: FontWeight.w500)),
                             if (item.expectedThreshold.isNotEmpty) ...[
                               const SizedBox(height: 3),
-                              Text('Expected threshold: ${item.expectedThreshold}', style: const TextStyle(color: Color(0xFF64748B), fontSize: 10)),
+                              Text('Expected threshold: ${item.expectedThreshold}', style: const TextStyle(color: TexoraColors.textMuted, fontSize: 10)),
                             ],
                             const SizedBox(height: 8),
                             Row(
@@ -1116,15 +1188,16 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
                                   width: 220,
                                   height: 32,
                                   child: TextField(
-                                    style: const TextStyle(color: Colors.white, fontSize: 11),
+                                    style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 11),
                                     decoration: InputDecoration(
                                       hintText: 'Observed value / reading',
-                                      hintStyle: const TextStyle(color: Color(0xFF475569), fontSize: 11),
+                                      hintStyle: const TextStyle(color: TexoraColors.textMuted, fontSize: 11),
                                       isDense: true,
                                       contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                                       filled: true,
-                                      fillColor: const Color(0xFF1E293B),
-                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide.none),
+                                      fillColor: TexoraColors.workspaceBg,
+                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: TexoraColors.cardBorder)),
+                                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: TexoraColors.cardBorder)),
                                     ),
                                     onChanged: (val) => item.observedValue = val,
                                     controller: TextEditingController(text: item.observedValue)
@@ -1134,14 +1207,14 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
                                 const SizedBox(width: 10),
                                 DropdownButton<String>(
                                   value: item.status,
-                                  dropdownColor: const Color(0xFF1E293B),
+                                  dropdownColor: TexoraColors.cardBg,
                                   style: const TextStyle(fontSize: 11),
                                   underline: const SizedBox(),
                                   items: const [
-                                    DropdownMenuItem(value: 'PENDING', child: Text('PENDING', style: TextStyle(color: Color(0xFF94A3B8)))),
+                                    DropdownMenuItem(value: 'PENDING', child: Text('PENDING', style: TextStyle(color: TexoraColors.textMuted))),
                                     DropdownMenuItem(value: 'PASS', child: Text('PASS', style: TextStyle(color: Color(0xFF10B981)))),
                                     DropdownMenuItem(value: 'DEFECT_FOUND', child: Text('DEFECT FOUND', style: TextStyle(color: Color(0xFFEF4444)))),
-                                    DropdownMenuItem(value: 'SKIPPED', child: Text('SKIPPED', style: TextStyle(color: Color(0xFF64748B)))),
+                                    DropdownMenuItem(value: 'SKIPPED', child: Text('SKIPPED', style: TextStyle(color: TexoraColors.textMuted))),
                                   ],
                                   onChanged: (val) {
                                     if (val != null) {
@@ -1166,9 +1239,12 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFF0F172A),
+              color: TexoraColors.cardBg,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFFEA580C).withAlpha(80)),
+              border: Border.all(color: const Color(0xFFFDBA74)),
+              boxShadow: const [
+                BoxShadow(color: Color(0x06000000), blurRadius: 4, offset: Offset(0, 2)),
+              ],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1179,37 +1255,39 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
                     SizedBox(width: 8),
                     Text(
                       'Technician Physical Fault Confirmation',
-                      style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                      style: TextStyle(color: TexoraColors.textPrimary, fontSize: 13, fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
                 const SizedBox(height: 10),
                 TextField(
                   controller: _confirmedFaultController,
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                  style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 12),
                   decoration: InputDecoration(
                     labelText: 'Confirmed Physical Fault *',
-                    labelStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                    labelStyle: const TextStyle(color: TexoraColors.textSecondary, fontSize: 12),
                     hintText: 'e.g. Deep groove ball bearing #6204 inner race fatigue spalling and micro-cracking',
-                    hintStyle: const TextStyle(color: Color(0xFF475569), fontSize: 11),
+                    hintStyle: const TextStyle(color: TexoraColors.textMuted, fontSize: 11),
                     filled: true,
-                    fillColor: const Color(0xFF1E293B),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide.none),
+                    fillColor: TexoraColors.workspaceBg,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: TexoraColors.cardBorder)),
+                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: TexoraColors.cardBorder)),
                   ),
                 ),
                 const SizedBox(height: 10),
                 TextField(
                   controller: _faultNotesController,
                   maxLines: 2,
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                  style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 12),
                   decoration: InputDecoration(
                     labelText: 'Diagnostic Findings & Observations',
-                    labelStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                    labelStyle: const TextStyle(color: TexoraColors.textSecondary, fontSize: 12),
                     hintText: 'Acoustic stethoscope inspection detected high frequency squeal. Thermal probe registered 76.4°C.',
-                    hintStyle: const TextStyle(color: Color(0xFF475569), fontSize: 11),
+                    hintStyle: const TextStyle(color: TexoraColors.textMuted, fontSize: 11),
                     filled: true,
-                    fillColor: const Color(0xFF1E293B),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide.none),
+                    fillColor: TexoraColors.workspaceBg,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: TexoraColors.cardBorder)),
+                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: TexoraColors.cardBorder)),
                   ),
                 ),
                 const SizedBox(height: 14),
@@ -1221,14 +1299,31 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
                         onPressed: () => _handleTransition('ACCEPTED', 'Technician accepted assignment'),
                         icon: const Icon(Icons.check, size: 14),
                         label: const Text('Accept Work Order', style: TextStyle(fontSize: 12)),
-                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
+                        style: ElevatedButton.styleFrom(backgroundColor: TexoraColors.primary, foregroundColor: Colors.white),
                       ),
                     const SizedBox(width: 10),
                     ElevatedButton.icon(
-                      onPressed: _submitInspection,
-                      icon: const Icon(Icons.send_rounded, size: 14),
-                      label: const Text('Submit Inspection & Begin Physical Repair', style: TextStyle(fontSize: 12)),
-                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEA580C)),
+                      onPressed: (ticket.status == 'AWAITING_VERIFICATION' || ticket.status == 'VERIFIED' || ticket.status == 'CLOSED')
+                          ? () => _showFeedback('Diagnostic inspection is already completed for ${ticket.ticketNumber}.', false)
+                          : _submitInspection,
+                      icon: Icon(
+                        (ticket.status == 'AWAITING_VERIFICATION' || ticket.status == 'VERIFIED' || ticket.status == 'CLOSED')
+                            ? Icons.check_circle_outline
+                            : Icons.send_rounded,
+                        size: 14,
+                      ),
+                      label: Text(
+                        (ticket.status == 'AWAITING_VERIFICATION' || ticket.status == 'VERIFIED' || ticket.status == 'CLOSED')
+                            ? 'Inspection Documented'
+                            : 'Submit Inspection & Begin Physical Repair',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: (ticket.status == 'AWAITING_VERIFICATION' || ticket.status == 'VERIFIED' || ticket.status == 'CLOSED')
+                            ? TexoraColors.textMuted
+                            : const Color(0xFFEA580C),
+                        foregroundColor: Colors.white,
+                      ),
                     ),
                   ],
                 ),
@@ -1255,30 +1350,34 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFF0F172A),
+              color: TexoraColors.cardBg,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFF1E293B)),
+              border: Border.all(color: TexoraColors.cardBorder),
+              boxShadow: const [
+                BoxShadow(color: Color(0x06000000), blurRadius: 4, offset: Offset(0, 2)),
+              ],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
                   'Physical Repair Documentation',
-                  style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                  style: TextStyle(color: TexoraColors.textPrimary, fontSize: 13, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 10),
                 TextField(
                   controller: _repairPerformedController,
                   maxLines: 4,
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                  style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 12),
                   decoration: InputDecoration(
                     labelText: 'Repair Work Carried Out *',
-                    labelStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                    labelStyle: const TextStyle(color: TexoraColors.textSecondary, fontSize: 12),
                     hintText: 'Disassembled main drive shaft assembly. Removed bearing #6204. Flushed housing and installed new SKF bearing with induction heater. Repacked with synthetic grease and realigned drive belt.',
-                    hintStyle: const TextStyle(color: Color(0xFF475569), fontSize: 11),
+                    hintStyle: const TextStyle(color: TexoraColors.textMuted, fontSize: 11),
                     filled: true,
-                    fillColor: const Color(0xFF1E293B),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide.none),
+                    fillColor: TexoraColors.workspaceBg,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: TexoraColors.cardBorder)),
+                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: TexoraColors.cardBorder)),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -1289,13 +1388,14 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
                       child: TextField(
                         controller: _repairDurationController,
                         keyboardType: TextInputType.number,
-                        style: const TextStyle(color: Colors.white, fontSize: 12),
+                        style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 12),
                         decoration: InputDecoration(
                           labelText: 'Actual Duration (Minutes) *',
-                          labelStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                          labelStyle: const TextStyle(color: TexoraColors.textSecondary, fontSize: 12),
                           filled: true,
-                          fillColor: const Color(0xFF1E293B),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide.none),
+                          fillColor: TexoraColors.workspaceBg,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: TexoraColors.cardBorder)),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: TexoraColors.cardBorder)),
                         ),
                       ),
                     ),
@@ -1303,15 +1403,16 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
                     Expanded(
                       child: TextField(
                         controller: _remainingIssuesController,
-                        style: const TextStyle(color: Colors.white, fontSize: 12),
+                        style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 12),
                         decoration: InputDecoration(
                           labelText: 'Remaining Observations / Pending Adjustments',
-                          labelStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                          labelStyle: const TextStyle(color: TexoraColors.textSecondary, fontSize: 12),
                           hintText: 'None. Rotates smoothly with zero binding.',
-                          hintStyle: const TextStyle(color: Color(0xFF475569), fontSize: 11),
+                          hintStyle: const TextStyle(color: TexoraColors.textMuted, fontSize: 11),
                           filled: true,
-                          fillColor: const Color(0xFF1E293B),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide.none),
+                          fillColor: TexoraColors.workspaceBg,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: TexoraColors.cardBorder)),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: TexoraColors.cardBorder)),
                         ),
                       ),
                     ),
@@ -1326,9 +1427,12 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFF0F172A),
+              color: TexoraColors.cardBg,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFF1E293B)),
+              border: Border.all(color: TexoraColors.cardBorder),
+              boxShadow: const [
+                BoxShadow(color: Color(0x06000000), blurRadius: 4, offset: Offset(0, 2)),
+              ],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1338,7 +1442,7 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
                   children: [
                     Text(
                       'Spare Parts Allocation & Stock Transaction',
-                      style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                      style: TextStyle(color: TexoraColors.textPrimary, fontSize: 13, fontWeight: FontWeight.bold),
                     ),
                     Text(
                       'SAFETY BARRIER: TRANSACTION-SAFE INVENTORY DEDUCTION',
@@ -1352,19 +1456,20 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
                     Expanded(
                       child: DropdownButtonFormField<String>(
                         initialValue: _selectedPartCode,
-                        dropdownColor: const Color(0xFF1E293B),
-                        style: const TextStyle(color: Colors.white, fontSize: 12),
+                        dropdownColor: TexoraColors.cardBg,
+                        style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 12),
                         decoration: InputDecoration(
                           labelText: 'Select Warehouse Part',
-                          labelStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                          labelStyle: const TextStyle(color: TexoraColors.textSecondary, fontSize: 12),
                           filled: true,
-                          fillColor: const Color(0xFF1E293B),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide.none),
+                          fillColor: TexoraColors.workspaceBg,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: TexoraColors.cardBorder)),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: TexoraColors.cardBorder)),
                         ),
                         items: catalog.map((p) {
                           final code = p['item_code'] as String;
                           final name = p['name'] as String;
-                          final stock = p['current_stock'] as num;
+                          final stock = parseDoubleWithFallback(p['current_stock'], 0.0, fieldName: 'current_stock');
                           return DropdownMenuItem(
                             value: code,
                             child: Text('$code — $name (Stock: $stock)', maxLines: 1, overflow: TextOverflow.ellipsis),
@@ -1379,23 +1484,39 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
                       child: TextField(
                         controller: _partQuantityController,
                         keyboardType: TextInputType.number,
-                        style: const TextStyle(color: Colors.white, fontSize: 12),
+                        style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 12),
                         decoration: InputDecoration(
                           labelText: 'Qty',
-                          labelStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                          labelStyle: const TextStyle(color: TexoraColors.textSecondary, fontSize: 12),
                           filled: true,
-                          fillColor: const Color(0xFF1E293B),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide.none),
+                          fillColor: TexoraColors.workspaceBg,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: TexoraColors.cardBorder)),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: TexoraColors.cardBorder)),
                         ),
                       ),
                     ),
                     const SizedBox(width: 10),
                     ElevatedButton.icon(
-                      onPressed: _consumePart,
-                      icon: const Icon(Icons.add_shopping_cart, size: 14),
-                      label: const Text('Deduct Stock', style: TextStyle(fontSize: 12)),
+                      onPressed: (ticket.status == 'AWAITING_VERIFICATION' || ticket.status == 'VERIFIED' || ticket.status == 'CLOSED')
+                          ? () => _showFeedback('Cannot deduct parts: Physical repair is already completed for ${ticket.ticketNumber}.', false)
+                          : _consumePart,
+                      icon: Icon(
+                        (ticket.status == 'AWAITING_VERIFICATION' || ticket.status == 'VERIFIED' || ticket.status == 'CLOSED')
+                            ? Icons.lock_outline
+                            : Icons.add_shopping_cart,
+                        size: 14,
+                      ),
+                      label: Text(
+                        (ticket.status == 'AWAITING_VERIFICATION' || ticket.status == 'VERIFIED' || ticket.status == 'CLOSED')
+                            ? 'Stock Locked'
+                            : 'Deduct Stock',
+                        style: const TextStyle(fontSize: 12),
+                      ),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0D9488),
+                        backgroundColor: (ticket.status == 'AWAITING_VERIFICATION' || ticket.status == 'VERIFIED' || ticket.status == 'CLOSED')
+                            ? TexoraColors.textMuted
+                            : const Color(0xFF0D9488),
+                        foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
                       ),
                     ),
@@ -1405,18 +1526,19 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
 
                 // Parts Consumed List
                 if (ticket.partsReplaced.isNotEmpty) ...[
-                  const Text('Parts Consumed for this Work Order:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                  const Text('Parts Consumed for this Work Order:', style: TextStyle(color: TexoraColors.textSecondary, fontSize: 11)),
                   const SizedBox(height: 6),
                   Container(
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B),
+                      color: TexoraColors.tableHeaderBg,
                       borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: TexoraColors.cardBorder),
                     ),
                     child: ListView.separated(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       itemCount: ticket.partsReplaced.length,
-                      separatorBuilder: (_, _) => const Divider(color: Color(0xFF334155), height: 1),
+                      separatorBuilder: (_, _) => const Divider(color: TexoraColors.cardBorder, height: 1),
                       itemBuilder: (context, idx) {
                         final part = ticket.partsReplaced[idx];
                         return ListTile(
@@ -1424,11 +1546,11 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
                           leading: const Icon(Icons.check_circle, color: Color(0xFF10B981), size: 16),
                           title: Text(
                             '${part['name'] ?? part['item_code']} (${part['item_code']})',
-                            style: const TextStyle(color: Colors.white, fontSize: 12),
+                            style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 12),
                           ),
                           subtitle: Text(
                             'Deducted: ${part['quantity']} ${part['unit'] ?? 'PCS'} • Safe reference registered',
-                            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
+                            style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 10),
                           ),
                           trailing: const Text('LEDGER LOCKED', style: TextStyle(color: Color(0xFF10B981), fontSize: 9, fontWeight: FontWeight.bold)),
                         );
@@ -1445,15 +1567,68 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              ElevatedButton.icon(
-                onPressed: _completeRepair,
-                icon: const Icon(Icons.check_circle_outline, size: 16),
-                label: const Text('Complete Physical Repair & Enter Telemetry Verification Window', style: TextStyle(fontSize: 13)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFEA580C),
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              if (ticket.status == 'AWAITING_VERIFICATION')
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: TexoraColors.badgeSuccessBg,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFF86EFAC)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 18),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Physical Repair Completed • Awaiting Verification',
+                        style: TextStyle(color: TexoraColors.badgeSuccessText, fontSize: 13, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(width: 14),
+                      ElevatedButton.icon(
+                        onPressed: () => _tabController.animateTo(2),
+                        icon: const Icon(Icons.arrow_forward_rounded, size: 14),
+                        label: const Text('Go to Verification Dashboard', style: TextStyle(fontSize: 12)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: TexoraColors.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else if (ticket.status == 'VERIFIED' || ticket.status == 'CLOSED')
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: TexoraColors.badgeInfoBg,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFBAE6FD)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.verified_rounded, color: TexoraColors.primary, size: 18),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Work Order ${ticket.status} — Physical Repair Signed Off',
+                        style: const TextStyle(color: TexoraColors.primary, fontSize: 13, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                ElevatedButton.icon(
+                  onPressed: _completeRepair,
+                  icon: const Icon(Icons.check_circle_outline, size: 16),
+                  label: const Text('Complete Physical Repair & Enter Telemetry Verification Window', style: TextStyle(fontSize: 13)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFEA580C),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                  ),
                 ),
-              ),
             ],
           ),
         ],
@@ -1482,9 +1657,12 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFF0F172A),
+              color: TexoraColors.cardBg,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFF1E293B)),
+              border: Border.all(color: TexoraColors.cardBorder),
+              boxShadow: const [
+                BoxShadow(color: Color(0x06000000), blurRadius: 4, offset: Offset(0, 2)),
+              ],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1494,15 +1672,17 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
                   children: [
                     const Text(
                       'Multi-Sample Telemetry Trend & Operating Threshold Comparison',
-                      style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                      style: TextStyle(color: TexoraColors.textPrimary, fontSize: 13, fontWeight: FontWeight.bold),
                     ),
                     ElevatedButton.icon(
                       onPressed: _evaluateRecovery,
                       icon: const Icon(Icons.sync_rounded, size: 14),
                       label: const Text('Re-Evaluate Live Engine', style: TextStyle(fontSize: 11)),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1E293B),
-                        foregroundColor: const Color(0xFF38BDF8),
+                        backgroundColor: TexoraColors.tableHeaderBg,
+                        foregroundColor: TexoraColors.primary,
+                        elevation: 0,
+                        side: const BorderSide(color: TexoraColors.cardBorder),
                       ),
                     ),
                   ],
@@ -1555,12 +1735,13 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
                 const SizedBox(height: 16),
 
                 // Data Points Table
-                const Text('Recent Sensor Readings (Pre & Post Repair):', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                const Text('Recent Sensor Readings (Pre & Post Repair):', style: TextStyle(color: TexoraColors.textSecondary, fontSize: 11)),
                 const SizedBox(height: 8),
                 Container(
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1E293B),
+                    color: TexoraColors.cardBg,
                     borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: TexoraColors.cardBorder),
                   ),
                   child: Table(
                     columnWidths: const {
@@ -1573,25 +1754,28 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
                     },
                     children: [
                       const TableRow(
-                        decoration: BoxDecoration(color: Color(0xFF0F172A)),
+                        decoration: BoxDecoration(color: TexoraColors.tableHeaderBg),
                         children: [
-                          Padding(padding: EdgeInsets.all(8), child: Text('Time', style: TextStyle(color: Color(0xFF64748B), fontSize: 10, fontWeight: FontWeight.bold))),
-                          Padding(padding: EdgeInsets.all(8), child: Text('Vibration (mm/s)', style: TextStyle(color: Color(0xFF64748B), fontSize: 10, fontWeight: FontWeight.bold))),
-                          Padding(padding: EdgeInsets.all(8), child: Text('Temperature (°C)', style: TextStyle(color: Color(0xFF64748B), fontSize: 10, fontWeight: FontWeight.bold))),
-                          Padding(padding: EdgeInsets.all(8), child: Text('Speed (RPM)', style: TextStyle(color: Color(0xFF64748B), fontSize: 10, fontWeight: FontWeight.bold))),
-                          Padding(padding: EdgeInsets.all(8), child: Text('Power (kW)', style: TextStyle(color: Color(0xFF64748B), fontSize: 10, fontWeight: FontWeight.bold))),
-                          Padding(padding: EdgeInsets.all(8), child: Text('Threshold Status', style: TextStyle(color: Color(0xFF64748B), fontSize: 10, fontWeight: FontWeight.bold))),
+                          Padding(padding: EdgeInsets.all(8), child: Text('Time', style: TextStyle(color: TexoraColors.textSecondary, fontSize: 10, fontWeight: FontWeight.bold))),
+                          Padding(padding: EdgeInsets.all(8), child: Text('Vibration (mm/s)', style: TextStyle(color: TexoraColors.textSecondary, fontSize: 10, fontWeight: FontWeight.bold))),
+                          Padding(padding: EdgeInsets.all(8), child: Text('Temperature (°C)', style: TextStyle(color: TexoraColors.textSecondary, fontSize: 10, fontWeight: FontWeight.bold))),
+                          Padding(padding: EdgeInsets.all(8), child: Text('Speed (RPM)', style: TextStyle(color: TexoraColors.textSecondary, fontSize: 10, fontWeight: FontWeight.bold))),
+                          Padding(padding: EdgeInsets.all(8), child: Text('Power (kW)', style: TextStyle(color: TexoraColors.textSecondary, fontSize: 10, fontWeight: FontWeight.bold))),
+                          Padding(padding: EdgeInsets.all(8), child: Text('Threshold Status', style: TextStyle(color: TexoraColors.textSecondary, fontSize: 10, fontWeight: FontWeight.bold))),
                         ],
                       ),
                       ...trend.take(6).map((pt) {
                         final vibExceeded = pt.vibrationMms >= limits.warningVibrationMms;
                         return TableRow(
+                          decoration: const BoxDecoration(
+                            border: Border(top: BorderSide(color: TexoraColors.cardBorder, width: 0.5)),
+                          ),
                           children: [
                             Padding(
                               padding: const EdgeInsets.all(8),
                               child: Text(
                                 '${pt.timestamp.hour.toString().padLeft(2, '0')}:${pt.timestamp.minute.toString().padLeft(2, '0')}:${pt.timestamp.second.toString().padLeft(2, '0')}',
-                                style: const TextStyle(color: Colors.white, fontSize: 11),
+                                style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 11),
                               ),
                             ),
                             Padding(
@@ -1605,9 +1789,9 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
                                 ),
                               ),
                             ),
-                            Padding(padding: const EdgeInsets.all(8), child: Text('${pt.temperatureC.toStringAsFixed(1)} °C', style: const TextStyle(color: Colors.white, fontSize: 11))),
-                            Padding(padding: const EdgeInsets.all(8), child: Text(pt.speedRpm.toStringAsFixed(0), style: const TextStyle(color: Colors.white, fontSize: 11))),
-                            Padding(padding: const EdgeInsets.all(8), child: Text(pt.powerKw.toStringAsFixed(1), style: const TextStyle(color: Colors.white, fontSize: 11))),
+                            Padding(padding: const EdgeInsets.all(8), child: Text('${pt.temperatureC.toStringAsFixed(1)} °C', style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 11))),
+                            Padding(padding: const EdgeInsets.all(8), child: Text(pt.speedRpm.toStringAsFixed(0), style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 11))),
+                            Padding(padding: const EdgeInsets.all(8), child: Text(pt.powerKw.toStringAsFixed(1), style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 11))),
                             Padding(
                               padding: const EdgeInsets.all(8),
                               child: Text(
@@ -1634,31 +1818,34 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFF0F172A),
+              color: TexoraColors.cardBg,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFF1E293B)),
+              border: Border.all(color: TexoraColors.cardBorder),
+              boxShadow: const [
+                BoxShadow(color: Color(0x06000000), blurRadius: 4, offset: Offset(0, 2)),
+              ],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
                   'Authorized Personnel Sign-Off & Return to Service Gate',
-                  style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                  style: TextStyle(color: TexoraColors.textPrimary, fontSize: 13, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 10),
                 const Text(
                   'Safety protocol mandates human verification: Even when telemetry normalizes, qualified operations personnel '
                   'must authorize the machine restart and return to service.',
-                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                  style: TextStyle(color: TexoraColors.textSecondary, fontSize: 11),
                 ),
                 const SizedBox(height: 12),
                 if (ticket.authorizedSignoffBy.isNotEmpty) ...[
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF065F46).withAlpha(100),
+                      color: TexoraColors.badgeSuccessBg,
                       borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: const Color(0xFF10B981)),
+                      border: Border.all(color: const Color(0xFF86EFAC)),
                     ),
                     child: Row(
                       children: [
@@ -1670,12 +1857,12 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
                             children: [
                               Text(
                                 'Authorized by: ${ticket.authorizedSignoffBy}',
-                                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 12, fontWeight: FontWeight.bold),
                               ),
                               if (ticket.signoffNotes.isNotEmpty)
                                 Text(
                                   'Notes: ${ticket.signoffNotes}',
-                                  style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 11),
+                                  style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 11),
                                 ),
                             ],
                           ),
@@ -1691,7 +1878,7 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
                         onPressed: _closeWithEvidence,
                         icon: const Icon(Icons.lock_rounded, size: 14),
                         label: const Text('Close Factory Incident with Verified Evidence', style: TextStyle(fontSize: 12)),
-                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981)),
+                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981), foregroundColor: Colors.white),
                       ),
                     ],
                   ),
@@ -1701,13 +1888,14 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
                       Expanded(
                         child: TextField(
                           controller: _signoffUserController,
-                          style: const TextStyle(color: Colors.white, fontSize: 12),
+                          style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 12),
                           decoration: InputDecoration(
                             labelText: 'Authorized Personnel Name & Role *',
-                            labelStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                            labelStyle: const TextStyle(color: TexoraColors.textSecondary, fontSize: 12),
                             filled: true,
-                            fillColor: const Color(0xFF1E293B),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide.none),
+                            fillColor: TexoraColors.workspaceBg,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: TexoraColors.cardBorder)),
+                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: TexoraColors.cardBorder)),
                           ),
                         ),
                       ),
@@ -1715,15 +1903,16 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
                       Expanded(
                         child: TextField(
                           controller: _signoffNotesController,
-                          style: const TextStyle(color: Colors.white, fontSize: 12),
+                          style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 12),
                           decoration: InputDecoration(
                             labelText: 'Authorization Notes',
-                            labelStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                            labelStyle: const TextStyle(color: TexoraColors.textSecondary, fontSize: 12),
                             hintText: 'Observed vibration normalized at full production speed.',
-                            hintStyle: const TextStyle(color: Color(0xFF475569), fontSize: 11),
+                            hintStyle: const TextStyle(color: TexoraColors.textMuted, fontSize: 11),
                             filled: true,
-                            fillColor: const Color(0xFF1E293B),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide.none),
+                            fillColor: TexoraColors.workspaceBg,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: TexoraColors.cardBorder)),
+                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: TexoraColors.cardBorder)),
                           ),
                         ),
                       ),
@@ -1739,7 +1928,9 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
                         label: const Text('Authorize Safe Return to Service', style: TextStyle(fontSize: 12)),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF10B981),
-                          disabledBackgroundColor: const Color(0xFF334155),
+                          foregroundColor: Colors.white,
+                          disabledBackgroundColor: TexoraColors.tableHeaderBg,
+                          disabledForegroundColor: TexoraColors.textMuted,
                         ),
                       ),
                     ],
@@ -1754,47 +1945,61 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
   }
 
   Widget _buildVerificationOutcomeBanner(String outcome, String summary) {
-    Color bannerColor;
+    Color bannerBg;
+    Color bannerBorder;
+    Color bannerText;
     IconData bannerIcon;
 
     switch (outcome) {
       case 'VERIFIED':
-        bannerColor = const Color(0xFF10B981);
+        bannerBg = TexoraColors.badgeSuccessBg;
+        bannerBorder = const Color(0xFF86EFAC);
+        bannerText = TexoraColors.badgeSuccessText;
         bannerIcon = Icons.verified_rounded;
         break;
       case 'PASSED_TELEMETRY_CHECKS':
       case 'AWAITING_AUTHORIZED_SIGNOFF':
-        bannerColor = const Color(0xFF0284C7);
+        bannerBg = TexoraColors.badgeInfoBg;
+        bannerBorder = const Color(0xFFBAE6FD);
+        bannerText = TexoraColors.primary;
         bannerIcon = Icons.hourglass_top_rounded;
         break;
       case 'MONITORING':
-        bannerColor = const Color(0xFFF59E0B);
+        bannerBg = TexoraColors.badgeWarningBg;
+        bannerBorder = const Color(0xFFFDE68A);
+        bannerText = TexoraColors.badgeWarningText;
         bannerIcon = Icons.monitor_heart_rounded;
         break;
       case 'FAILED':
-        bannerColor = const Color(0xFFEF4444);
+        bannerBg = TexoraColors.badgeDangerBg;
+        bannerBorder = const Color(0xFFFECACA);
+        bannerText = TexoraColors.badgeDangerText;
         bannerIcon = Icons.cancel_rounded;
         break;
       case 'INCONCLUSIVE':
-        bannerColor = const Color(0xFF8B5CF6);
+        bannerBg = const Color(0xFFFAF5FF);
+        bannerBorder = const Color(0xFFDDD6FE);
+        bannerText = const Color(0xFF7C3AED);
         bannerIcon = Icons.help_outline_rounded;
         break;
       default:
-        bannerColor = const Color(0xFF64748B);
+        bannerBg = TexoraColors.tableHeaderBg;
+        bannerBorder = TexoraColors.cardBorder;
+        bannerText = TexoraColors.textSecondary;
         bannerIcon = Icons.pending_actions_rounded;
     }
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: bannerColor.withAlpha(25),
+        color: bannerBg,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: bannerColor),
+        border: Border.all(color: bannerBorder),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(bannerIcon, color: bannerColor, size: 24),
+          Icon(bannerIcon, color: bannerText, size: 24),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -1804,14 +2009,14 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
                   children: [
                     Text(
                       'Verification Status: $outcome',
-                      style: TextStyle(color: bannerColor, fontSize: 14, fontWeight: FontWeight.bold),
+                      style: TextStyle(color: bannerText, fontSize: 14, fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
                 const SizedBox(height: 4),
                 Text(
                   summary,
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                  style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 12),
                 ),
               ],
             ),
@@ -1825,10 +2030,10 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: TexoraColors.tableHeaderBg,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: isNominal ? const Color(0xFF10B981).withAlpha(80) : const Color(0xFFEF4444).withAlpha(80),
+          color: isNominal ? const Color(0xFF86EFAC) : const Color(0xFFFECACA),
         ),
       ),
       child: Column(
@@ -1837,7 +2042,7 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(title, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10)),
+              Text(title, style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 10)),
               Icon(icon, size: 14, color: isNominal ? const Color(0xFF10B981) : const Color(0xFFEF4444)),
             ],
           ),
@@ -1845,13 +2050,13 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
           Text(
             value,
             style: TextStyle(
-              color: isNominal ? Colors.white : const Color(0xFFEF4444),
+              color: isNominal ? TexoraColors.textPrimary : const Color(0xFFDC2626),
               fontSize: 16,
               fontWeight: FontWeight.bold,
             ),
           ),
           const SizedBox(height: 2),
-          Text(subtitle, style: const TextStyle(color: Color(0xFF64748B), fontSize: 10)),
+          Text(subtitle, style: const TextStyle(color: TexoraColors.textMuted, fontSize: 10)),
         ],
       ),
     );
@@ -1869,34 +2074,34 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Immutable Work Order State Transitions:', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+          const Text('Immutable Work Order State Transitions:', style: TextStyle(color: TexoraColors.textPrimary, fontSize: 13, fontWeight: FontWeight.bold)),
           const SizedBox(height: 10),
           Container(
             decoration: BoxDecoration(
-              color: const Color(0xFF0F172A),
+              color: TexoraColors.cardBg,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFF1E293B)),
+              border: Border.all(color: TexoraColors.cardBorder),
             ),
             child: transitions.isEmpty
                 ? const Padding(
                     padding: EdgeInsets.all(16),
-                    child: Text('No transitions recorded yet.', style: TextStyle(color: Color(0xFF64748B), fontSize: 12)),
+                    child: Text('No transitions recorded yet.', style: TextStyle(color: TexoraColors.textMuted, fontSize: 12)),
                   )
                 : ListView.separated(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     itemCount: transitions.length,
-                    separatorBuilder: (_, _) => const Divider(color: Color(0xFF1E293B), height: 1),
+                    separatorBuilder: (_, _) => const Divider(color: TexoraColors.cardBorder, height: 1),
                     itemBuilder: (context, idx) {
                       final tr = transitions[idx];
                       return ListTile(
                         dense: true,
                         leading: const Icon(Icons.arrow_circle_right, color: Color(0xFFEA580C), size: 16),
-                        title: Text('${tr.previousState} ➔ ${tr.newState}', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-                        subtitle: Text('By ${tr.actor} (${tr.actorRole}) • ${tr.reason}', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10)),
+                        title: Text('${tr.previousState} ➔ ${tr.newState}', style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 12, fontWeight: FontWeight.bold)),
+                        subtitle: Text('By ${tr.actor} (${tr.actorRole}) • ${tr.reason}', style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 10)),
                         trailing: Text(
                           '${tr.timestamp.hour.toString().padLeft(2, '0')}:${tr.timestamp.minute.toString().padLeft(2, '0')}',
-                          style: const TextStyle(color: Color(0xFF64748B), fontSize: 10),
+                          style: const TextStyle(color: TexoraColors.textMuted, fontSize: 10),
                         ),
                       );
                     },
@@ -1904,31 +2109,31 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
           ),
           const SizedBox(height: 20),
 
-          const Text('Historical Asset Maintenance Log:', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+          const Text('Historical Asset Maintenance Log:', style: TextStyle(color: TexoraColors.textPrimary, fontSize: 13, fontWeight: FontWeight.bold)),
           const SizedBox(height: 10),
           Container(
             decoration: BoxDecoration(
-              color: const Color(0xFF0F172A),
+              color: TexoraColors.cardBg,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFF1E293B)),
+              border: Border.all(color: TexoraColors.cardBorder),
             ),
             child: history.isEmpty
                 ? const Padding(
                     padding: EdgeInsets.all(16),
-                    child: Text('No previous service events recorded.', style: TextStyle(color: Color(0xFF64748B), fontSize: 12)),
+                    child: Text('No previous service events recorded.', style: TextStyle(color: TexoraColors.textMuted, fontSize: 12)),
                   )
                 : ListView.separated(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     itemCount: history.length,
-                    separatorBuilder: (_, _) => const Divider(color: Color(0xFF1E293B), height: 1),
+                    separatorBuilder: (_, _) => const Divider(color: TexoraColors.cardBorder, height: 1),
                     itemBuilder: (context, idx) {
                       final h = history[idx];
                       return ListTile(
                         dense: true,
-                        leading: const Icon(Icons.build, color: Color(0xFF38BDF8), size: 16),
-                        title: Text(h['summary'] as String? ?? 'Service event', style: const TextStyle(color: Colors.white, fontSize: 12)),
-                        subtitle: Text('Type: ${h['maintenance_type']} • Downtime: ${h['downtime_minutes']} mins', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10)),
+                        leading: const Icon(Icons.build, color: TexoraColors.primary, size: 16),
+                        title: Text(h['summary'] as String? ?? 'Service event', style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 12)),
+                        subtitle: Text('Type: ${h['maintenance_type']} • Downtime: ${h['downtime_minutes']} mins', style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 10)),
                       );
                     },
                   ),
@@ -1981,7 +2186,7 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
         color = const Color(0xFF0D9488);
         break;
       case 'AWAITING_VERIFICATION':
-        color = const Color(0xFF0284C7);
+        color = TexoraColors.primary;
         break;
       case 'REPAIR_COMPLETED':
         color = const Color(0xFF6366F1);
@@ -1995,13 +2200,13 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
         break;
       case 'ACCEPTED':
       case 'ASSIGNED':
-        color = const Color(0xFF38BDF8);
+        color = const Color(0xFF0284C7);
         break;
       case 'VERIFICATION_FAILED':
         color = const Color(0xFFEF4444);
         break;
       default:
-        color = const Color(0xFF64748B);
+        color = TexoraColors.textSecondary;
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -2024,7 +2229,7 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
         break;
       case 'PASSED_TELEMETRY_CHECKS':
       case 'AWAITING_AUTHORIZED_SIGNOFF':
-        color = const Color(0xFF0284C7);
+        color = TexoraColors.primary;
         break;
       case 'MONITORING':
         color = const Color(0xFFF59E0B);
@@ -2033,7 +2238,7 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
         color = const Color(0xFFEF4444);
         break;
       default:
-        color = const Color(0xFF64748B);
+        color = TexoraColors.textMuted;
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
@@ -2055,7 +2260,7 @@ class _MaintenanceExecutionScreenState extends State<MaintenanceExecutionScreen>
       case 'MEDIUM':
         return const Color(0xFFF59E0B);
       default:
-        return const Color(0xFF38BDF8);
+        return TexoraColors.primary;
     }
   }
 }

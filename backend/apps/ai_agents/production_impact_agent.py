@@ -1,9 +1,10 @@
 """
 Autonomous Production Impact & Order Rescheduling Agent for Texora AI.
-Analyzes active production batches, calculates downtime production loss,
-identifies client delivery risks, evaluates alternate factory machinery,
-and proposes batch rerouting through manager approval gates.
+AI-assisted production disruption evaluation using Google Gemini with deterministic
+throughput loss calculations, real batch verification, and manager approval gates.
 """
+import os
+import json
 import logging
 from typing import Dict, Any, List, Optional
 from datetime import timedelta
@@ -18,22 +19,50 @@ from apps.ai_agents.models import (
     AgentType,
     AgentExecutionStatus,
 )
+from apps.ai_agents.llm_client import get_llm_provider, BaseLLMProvider, LLMResponse
+from apps.ai_agents.schemas import (
+    validate_production_impact_output,
+    build_metadata_envelope,
+    PROVENANCE_GROQ_LIVE,
+    PROVENANCE_GEMINI_LIVE,
+    PROVENANCE_DETERMINISTIC_FALLBACK,
+    PROVENANCE_MOCK_SUCCESS,
+    PROVENANCE_PROVIDER_RATE_LIMITED,
+    PROVENANCE_PROVIDER_UNAVAILABLE,
+)
 from apps.ai_agents.action_service import ActionSafetyService
 from apps.incidents.models import FactoryIncident
 from apps.machines.models import Machine, MachineStatus
 from apps.production.models import ProductionBatch, ProductionOrder, OrderStatus, OrderPriority
+from apps.production.capacity_engine import CapacityIntelligenceEngine
 
 logger = logging.getLogger(__name__)
+
+PRODUCTION_SYSTEM_PROMPT = """You are the Texora AI Autonomous Production Impact & Order Rescheduling Agent for an industrial textile manufacturing plant.
+Your mission is to analyze active production schedules, quantify the operational disruption caused by machinery downtime, and synthesize mitigation and rerouting recommendations.
+
+STRICT OPERATIONAL RULES:
+1. All numerical quantities (throughput loss, batch sizes, due dates) must be grounded strictly in the provided database context. Do not invent orders or machine codes.
+2. Clearly formulate:
+   - production_disruption_explanation: Clear narrative of production and client delivery exposure.
+   - suggested_production_adjustments: Pragmatic manufacturing adjustments (e.g., lot-size adjustments, priority shifts).
+   - recommended_alternate_machines: List of objects with machine_code, rationale, and capacity_fit ("HIGH"/"MODERATE").
+   - recovery_plan: Step-by-step sequence to return production to baseline schedule.
+   - operational_consequences_summary: Executive summary of delivery risks.
+   - confidence_score: Confidence score (10.0 to 99.0).
+   - risk_level: "LOW", "MEDIUM", or "HIGH".
+3. Return your response exclusively as valid JSON matching the schema."""
 
 
 class ProductionImpactAgent:
     """
     Autonomous Production Impact Agent.
-    Quantifies the operational and delivery fallout of machinery failures, identifies
-    threatened customer orders, discovers capable alternate machines, and plans rerouting.
+    Combines Google Gemini reasoning with deterministic manufacturing calculations
+    to quantify operational fallout, identify threatened orders, and propose batch rerouting through approval gates.
     """
 
-    def __init__(self):
+    def __init__(self, provider: Optional[BaseLLMProvider] = None):
+        self.provider = provider or get_llm_provider()
         self._ensure_agent_definition()
 
     def _ensure_agent_definition(self) -> AgentDefinition:
@@ -42,7 +71,7 @@ class ProductionImpactAgent:
             defaults={
                 "name": "Production Rescheduling & Impact Agent",
                 "description": "Autonomous manufacturing impact analyst assessing batch delays, capacity buffers, and alternate machine rerouting.",
-                "model_name": "deterministic-production-v1",
+                "model_name": "gemini-3.8-flash",
                 "is_enabled": True,
                 "permitted_actions": [
                     "REROUTE_PRODUCTION_BATCH",
@@ -52,14 +81,27 @@ class ProductionImpactAgent:
                 "sensitivity_threshold": 0.85,
             },
         )
+        if agent_def.model_name == "deterministic-production-v1":
+            agent_def.model_name = "gemini-3.8-flash"
+            agent_def.save(update_fields=["model_name"])
         return agent_def
 
     def evaluate_production_impact(
-        self, incident_id: int, estimated_downtime_hours: float = 1.5
+        self,
+        incident_id: int,
+        estimated_downtime_hours: float = 1.5,
+        health_diagnosis: Optional[Dict[str, Any]] = None,
+        maintenance_recommendation: Optional[Dict[str, Any]] = None,
+        inventory_assessment: Optional[Dict[str, Any]] = None,
+        force_provider: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Assesses live production batches on the impaired machine and proposes mitigation actions.
+        Assesses live production batches on the impaired machine and proposes mitigation actions
+        using Gemini reasoning grounded in real production database schedules.
         """
+        if force_provider:
+            self.provider = get_llm_provider(force_provider)
+
         incident = FactoryIncident.objects.select_related("machine", "department").filter(id=incident_id).first()
         if not incident:
             return {"success": False, "error": f"Incident #{incident_id} not found."}
@@ -75,102 +117,105 @@ class ProductionImpactAgent:
             incident=incident,
             trigger_event=f"PRODUCTION_IMPACT_ANALYSIS on {machine.code} ({incident.incident_code})",
             status=AgentExecutionStatus.RUNNING,
-            context_payload={
-                "incident_code": incident.incident_code,
-                "machine_code": machine.code,
-                "estimated_downtime_hours": estimated_downtime_hours,
-            },
         )
 
         try:
-            # 1. Fetch active batches on affected machine
+            # 1. Deterministic Calculation via CapacityIntelligenceEngine
+            assessment = CapacityIntelligenceEngine.evaluate_machine_breakdown_impact(
+                machine=machine,
+                estimated_downtime_hours=estimated_downtime_hours,
+                incident=incident,
+            )
+            estimated_loss_units = float(assessment.output_quantity_at_risk)
+            deterministic_loss_inr = float(assessment.deterministic_loss_inr)
+            batches_data = assessment.affected_batches
+            alternate_candidates = assessment.alternate_capacities
+            all_affected_orders = assessment.affected_orders
+            orders_at_risk = [o for o in all_affected_orders if o.get("is_at_risk")]
+
+            # Query real batches for possible rerouting action
             batches = ProductionBatch.objects.filter(
                 machine=machine, status__in=["RUNNING", "STAGED", "PAUSED"]
             ).select_related("production_order", "production_order__department")
 
-            batches_data = []
-            orders_at_risk = []
-            total_planned_qty = 0.0
-            total_actual_qty = 0.0
+            # 2. Assemble Evidence Context
+            evidence_context = {
+                "machine_code": machine.code,
+                "incident_severity": incident.severity,
+                "estimated_downtime_hours": estimated_downtime_hours,
+                "estimated_loss_units": estimated_loss_units,
+                "deterministic_loss_inr": deterministic_loss_inr,
+                "active_batches_count": len(batches_data),
+                "orders_at_risk_count": len(orders_at_risk),
+                "orders_at_risk": orders_at_risk,
+                "all_affected_orders": all_affected_orders,
+                "alternate_machines_available": alternate_candidates,
+                "assessment_code": assessment.assessment_code,
+            }
 
-            now = timezone.now().date()
+            user_prompt = f"""PRODUCTION IMPACT EVALUATION REQUEST:
+Impaired Machine: {machine.code} ({machine.name})
+Estimated Repair Downtime: {estimated_downtime_hours} hours
+Throughput Loss Calculation: ~{estimated_loss_units} units
 
-            for b in batches:
-                order = b.production_order
-                planned = float(b.planned_quantity)
-                actual = float(b.actual_quantity)
-                defects = float(b.defect_quantity)
-                total_planned_qty += planned
-                total_actual_qty += actual
+ACTIVE PRODUCTION BATCHES ON MACHINE:
+{json.dumps(batches_data, indent=2)}
 
-                days_until_due = (order.due_date - now).days if order.due_date else 99
-                is_rush = order.priority in [OrderPriority.URGENT, OrderPriority.HIGH]
-                is_at_risk = days_until_due <= 3 or (is_rush and days_until_due <= 5)
+THREATENED CUSTOMER ORDERS:
+{json.dumps(orders_at_risk, indent=2)}
 
-                batch_summary = {
-                    "batch_id": b.id,
-                    "batch_number": b.batch_number,
-                    "order_number": order.order_number,
-                    "client_name": order.client_name,
-                    "spec": order.fabric_or_yarn_spec,
-                    "planned_qty": planned,
-                    "actual_qty": actual,
-                    "defect_qty": defects,
-                    "unit": order.unit,
-                    "status": b.status,
-                    "due_date": order.due_date.isoformat() if order.due_date else None,
-                    "days_until_due": days_until_due,
-                    "is_at_risk": is_at_risk,
+DISCOVERED COMPATIBLE ALTERNATE MACHINERY:
+{json.dumps(alternate_candidates, indent=2)}
+
+Evaluate schedule fallout, formulate production adjustments, and specify a recovery plan. Return valid JSON only."""
+
+            # 5. Invoke LLM Provider
+            llm_response = self.provider.generate_structured(
+                system_prompt=PRODUCTION_SYSTEM_PROMPT,
+                user_prompt=user_prompt,
+                schema_description="ProductionImpactSchema",
+            )
+
+            execution.latency_ms = llm_response.latency_ms
+            execution.token_count = llm_response.token_count
+
+            if llm_response.status == "SUCCESS" and llm_response.structured_json:
+                ai_output = validate_production_impact_output(llm_response.structured_json, machine.code)
+                prov = getattr(llm_response, "provider", "")
+                if prov == "groq" or getattr(llm_response, "reasoning_source", "") == PROVENANCE_GROQ_LIVE:
+                    reasoning_source = PROVENANCE_GROQ_LIVE
+                elif prov == "gemini" or getattr(llm_response, "reasoning_source", "") == PROVENANCE_GEMINI_LIVE:
+                    reasoning_source = PROVENANCE_GEMINI_LIVE
+                elif prov == "mock":
+                    reasoning_source = PROVENANCE_MOCK_SUCCESS
+                else:
+                    reasoning_source = getattr(llm_response, "reasoning_source", PROVENANCE_GROQ_LIVE)
+                provider_attempt_status = llm_response.provider_attempt_status or reasoning_source
+            else:
+                provider_attempt_status = llm_response.provider_attempt_status or PROVENANCE_DETERMINISTIC_FALLBACK
+                reasoning_source = PROVENANCE_DETERMINISTIC_FALLBACK
+                ai_output = {
+                    "machine_code": machine.code,
+                    "production_disruption_explanation": f"Impairment on {machine.code} induces ~{estimated_loss_units} units lost output over {estimated_downtime_hours}h downtime.",
+                    "suggested_production_adjustments": [
+                        "Prioritize critical batches upon machine recovery",
+                        "Stage backup bobbin spools to minimize post-restart setup lag",
+                    ],
+                    "recommended_alternate_machines": [
+                        {"machine_code": ac["machine_code"], "rationale": "Compatible department capacity", "capacity_fit": ac["available_capacity"]}
+                        for ac in alternate_candidates[:2]
+                    ],
+                    "recovery_plan": [
+                        f"Complete maintenance on {machine.code} within {estimated_downtime_hours}h",
+                        "Verify post-repair telemetry normalization",
+                        "Resume paused batch with nominal speed verification",
+                    ],
+                    "operational_consequences_summary": f"Estimated output deficit: {estimated_loss_units} units. Customer orders at risk: {len(orders_at_risk)}.",
+                    "confidence_score": 92.0,
+                    "risk_level": "HIGH" if len(orders_at_risk) > 0 else "LOW",
                 }
-                batches_data.append(batch_summary)
 
-                if is_at_risk:
-                    orders_at_risk.append({
-                        "order_number": order.order_number,
-                        "client_name": order.client_name,
-                        "due_date": order.due_date.isoformat(),
-                        "days_until_due": days_until_due,
-                        "priority": order.priority,
-                        "spec": order.fabric_or_yarn_spec,
-                        "target_quantity": float(order.target_quantity),
-                        "completed_quantity": float(order.completed_quantity),
-                        "progress_pct": order.progress_pct,
-                    })
-
-            # 2. Estimate lost output during downtime
-            # Baseline speed: approx 80-120 units/hour per machine
-            estimated_loss_units = round(estimated_downtime_hours * 95.0, 1)
-
-            # 3. Discover Alternate Compatible Machines
-            alternate_candidates = []
-            if machine.machine_type:
-                compatible_machines = Machine.objects.filter(
-                    department=machine.department,
-                    machine_type=machine.machine_type,
-                    status__in=[MachineStatus.OPERATIONAL, MachineStatus.IDLE],
-                ).exclude(id=machine.id)
-
-                for cm in compatible_machines:
-                    # Check if candidate has active incidents
-                    has_active_incident = FactoryIncident.objects.filter(
-                        machine=cm, status__in=["OPEN", "INVESTIGATING", "MITIGATING"]
-                    ).exists()
-
-                    active_batch_count = ProductionBatch.objects.filter(
-                        machine=cm, status__in=["RUNNING", "STAGED"]
-                    ).count()
-
-                    if not has_active_incident and active_batch_count <= 2:
-                        alternate_candidates.append({
-                            "machine_id": cm.id,
-                            "machine_code": cm.code,
-                            "machine_name": cm.name,
-                            "status": cm.status,
-                            "active_batches_assigned": active_batch_count,
-                            "available_capacity": "HIGH" if active_batch_count == 0 else "MODERATE",
-                        })
-
-            # 4. Propose Rerouting Action if At-Risk Batches and Alternates exist
+            # 6. Propose Rerouting Action if At-Risk Batches and Alternates exist
             proposed_actions = []
             if orders_at_risk and alternate_candidates:
                 target_alt = alternate_candidates[0]
@@ -202,9 +247,9 @@ class ProductionImpactAgent:
                     "target_machine": target_alt["machine_code"],
                 })
 
-            # 5. Persist AgentDecision
+            # 7. Persist AgentDecision
             summary_text = (
-                f"Evaluated {len(batches_data)} active batches on {machine.code}. "
+                f"[{reasoning_source}] Evaluated {len(batches_data)} active batches on {machine.code}. "
                 f"Estimated Downtime: {estimated_downtime_hours}h (Loss: ~{estimated_loss_units} units). "
                 f"Orders at Risk: {len(orders_at_risk)}. Alternate Machines Available: {len(alternate_candidates)}."
             )
@@ -212,11 +257,40 @@ class ProductionImpactAgent:
             decision = AgentDecision.objects.create(
                 execution=execution,
                 decision_type="PRODUCTION_REROUTE",
-                rationale=summary_text,
-                confidence_score=92.00,
-                risk_level="HIGH" if len(orders_at_risk) > 0 else "LOW",
+                rationale=(
+                    f"{summary_text}\n"
+                    f"Disruption Analysis: {ai_output['production_disruption_explanation']}\n"
+                    f"Consequences: {ai_output['operational_consequences_summary']}"
+                ),
+                confidence_score=ai_output["confidence_score"],
+                risk_level=ai_output["risk_level"],
                 requires_human_approval=True,
             )
+
+            # Update ProductionImpactAssessment with AI narrative and recommendations
+            if ai_output.get("production_disruption_explanation"):
+                assessment.ai_explanation = ai_output["production_disruption_explanation"]
+            recs = ai_output.get("recommended_next_steps") or ai_output.get("suggested_production_adjustments") or []
+            if recs:
+                assessment.recommendations = recs
+            assessment.save(update_fields=["ai_explanation", "recommendations"])
+
+            # 8. Store Uniform Metadata Envelope
+            envelope = build_metadata_envelope(
+                agent_name=agent_def.name,
+                incident_id=incident.id,
+                machine_code=machine.code,
+                model_name=getattr(llm_response, "model", getattr(self.provider, "model_name", "qwen/qwen3.8-27b")),
+                provider_attempt_status=provider_attempt_status,
+                reasoning_source=reasoning_source,
+                latency_ms=execution.latency_ms,
+                token_count=execution.token_count,
+                execution_errors=llm_response.error_message,
+                input_context=evidence_context,
+                structured_output=ai_output,
+                provider_name=getattr(llm_response, "provider", "groq"),
+            )
+            execution.context_payload = envelope
 
             execution.status = AgentExecutionStatus.COMPLETED
             execution.execution_summary = summary_text
@@ -226,12 +300,19 @@ class ProductionImpactAgent:
             return {
                 "success": True,
                 "execution_id": str(execution.execution_id),
+                "assessment_id": assessment.id,
+                "assessment_code": assessment.assessment_code,
                 "active_batches": batches_data,
                 "orders_at_risk": orders_at_risk,
+                "all_affected_orders": all_affected_orders,
                 "alternate_machines": alternate_candidates,
                 "estimated_loss_units": estimated_loss_units,
+                "deterministic_loss_inr": deterministic_loss_inr,
                 "proposed_actions": proposed_actions,
                 "summary": summary_text,
+                "reasoning_source": reasoning_source,
+                "provider_attempt_status": provider_attempt_status,
+                "ai_output": ai_output,
             }
 
         except Exception as exc:

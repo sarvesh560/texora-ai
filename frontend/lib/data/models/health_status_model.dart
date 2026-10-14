@@ -142,5 +142,8 @@ class SystemHealthSummaryModel {
       workers: workersMap,
     );
   }
+
+  WorkerInfo? get detector => workers['detector'] ?? workers['anomaly_detector'];
+  WorkerInfo? get orchestrator => workers['orchestrator'] ?? workers['autonomous_orchestrator'];
 }
 

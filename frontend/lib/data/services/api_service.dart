@@ -995,6 +995,28 @@ class ApiService {
     }
   }
 
+  /// Request revision on an approval request
+  Future<Map<String, dynamic>> requestRevisionApprovalRequest(
+    int approvalId, {
+    required String reviewedBy,
+    required String revisionNotes,
+  }) async {
+    final uri = Uri.parse('${AppConfig.baseUrl}/approvals/$approvalId/request-revision/');
+    try {
+      final response = await _client.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'approved_by': reviewedBy,
+          'response_notes': revisionNotes,
+        }),
+      ).timeout(const Duration(seconds: 15));
+      return json.decode(response.body) as Map<String, dynamic>;
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
   /// Fetches typed list of FactoryIncidents
   Future<List<FactoryIncidentModel>> getFactoryIncidents() async {
     final uri = Uri.parse('${AppConfig.baseUrl}/incidents/');
@@ -1047,6 +1069,25 @@ class ApiService {
       // Return null on failure
     }
     return null;
+  }
+
+  /// Fetches all registered AI agents from /agents/
+  Future<List<Map<String, dynamic>>> getRegisteredAgents() async {
+    final uri = Uri.parse('${AppConfig.baseUrl}/agents/');
+    try {
+      final response = await _client.get(uri).timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        final decoded = json.decode(response.body);
+        if (decoded is List) {
+          return List<Map<String, dynamic>>.from(decoded);
+        } else if (decoded is Map && decoded['results'] is List) {
+          return List<Map<String, dynamic>>.from(decoded['results']);
+        }
+      }
+    } catch (e) {
+      // Return empty on failure
+    }
+    return [];
   }
 
   /// Fetches deep audit details for a specific agent execution
@@ -1374,6 +1415,177 @@ class ApiService {
       return json.decode(response.body) as Map<String, dynamic>;
     } catch (e) {
       return {'error': e.toString()};
+    }
+  }
+
+  // ==========================================
+  // QUALITY INSPECTION & LABORATORY APIS
+  // ==========================================
+
+  Future<Map<String, dynamic>?> getQualitySummary() async {
+    final uri = Uri.parse('${AppConfig.baseUrl}/inspections/summary/');
+    try {
+      final response = await _client.get(uri).timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        return json.decode(response.body) as Map<String, dynamic>;
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getQualityInspections({String? status}) async {
+    String url = '${AppConfig.baseUrl}/inspections/';
+    if (status != null && status.isNotEmpty && status != 'ALL') {
+      url += '?status=$status';
+    }
+    final uri = Uri.parse(url);
+    try {
+      final response = await _client.get(uri).timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        final decoded = json.decode(response.body);
+        if (decoded is List) {
+          return decoded.cast<Map<String, dynamic>>();
+        } else if (decoded is Map && decoded['results'] is List) {
+          return (decoded['results'] as List).cast<Map<String, dynamic>>();
+        }
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  // ==========================================
+  // INVENTORY & SPARE PARTS APIS
+  // ==========================================
+
+  Future<Map<String, dynamic>?> getInventorySummary() async {
+    final uri = Uri.parse('${AppConfig.baseUrl}/items/summary/');
+    try {
+      final response = await _client.get(uri).timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        return json.decode(response.body) as Map<String, dynamic>;
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getInventoryItems({String? category}) async {
+    String url = '${AppConfig.baseUrl}/items/';
+    if (category != null && category.isNotEmpty && category != 'ALL') {
+      url += '?category=$category';
+    }
+    final uri = Uri.parse(url);
+    try {
+      final response = await _client.get(uri).timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        final decoded = json.decode(response.body);
+        if (decoded is List) {
+          return decoded.cast<Map<String, dynamic>>();
+        } else if (decoded is Map && decoded['results'] is List) {
+          return (decoded['results'] as List).cast<Map<String, dynamic>>();
+        }
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getInventoryTransactions() async {
+    final uri = Uri.parse('${AppConfig.baseUrl}/transactions/');
+    try {
+      final response = await _client.get(uri).timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        final decoded = json.decode(response.body);
+        if (decoded is List) {
+          return decoded.cast<Map<String, dynamic>>();
+        } else if (decoded is Map && decoded['results'] is List) {
+          return (decoded['results'] as List).cast<Map<String, dynamic>>();
+        }
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  // ==========================================
+  // ELECTRICAL ENERGY & SUB-METERING APIS
+  // ==========================================
+
+  Future<Map<String, dynamic>?> getEnergySummary() async {
+    final uri = Uri.parse('${AppConfig.baseUrl}/readings/summary/');
+    try {
+      final response = await _client.get(uri).timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        return json.decode(response.body) as Map<String, dynamic>;
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getEnergyReadings({int limit = 50}) async {
+    final uri = Uri.parse('${AppConfig.baseUrl}/readings/');
+    try {
+      final response = await _client.get(uri).timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        final decoded = json.decode(response.body);
+        if (decoded is List) {
+          return decoded.take(limit).toList().cast<Map<String, dynamic>>();
+        } else if (decoded is Map && decoded['results'] is List) {
+          return (decoded['results'] as List).take(limit).toList().cast<Map<String, dynamic>>();
+        }
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  // ==========================================
+  // UNIFIED FACTORY REPORTS & ANALYTICS APIS
+  // ==========================================
+
+  Future<Map<String, dynamic>?> getReportsOverview({
+    String category = 'factory_overview',
+    String range = 'today',
+  }) async {
+    final uri = Uri.parse('${AppConfig.baseUrl}/reports/overview/?category=$category&range=$range');
+    try {
+      final response = await _client.get(uri).timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        return json.decode(response.body) as Map<String, dynamic>;
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String getReportsExportCsvUrl({String category = 'factory_overview', String range = 'today'}) {
+    return '${AppConfig.baseUrl}/reports/export/?category=$category&range=$range';
+  }
+
+  Future<String?> fetchReportsCsv({
+    String category = 'factory_overview',
+    String range = 'today',
+  }) async {
+    final uri = Uri.parse(getReportsExportCsvUrl(category: category, range: range));
+    try {
+      final response = await _client.get(uri).timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        return response.body;
+      }
+      return null;
+    } catch (_) {
+      return null;
     }
   }
 }

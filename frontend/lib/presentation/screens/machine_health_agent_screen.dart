@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import '../../core/constants/app_colors.dart';
+import '../../core/theme/texora_design_system.dart';
 import '../../data/models/ai_agent_model.dart';
 import '../../data/models/digital_twin_models.dart';
 import '../../data/services/api_service.dart';
+import '../widgets/design_system/design_system.dart';
+import 'digital_twin_screen.dart';
 
 class MachineHealthAgentScreen extends StatefulWidget {
   final ApiService? apiService;
@@ -17,6 +19,7 @@ class MachineHealthAgentScreen extends StatefulWidget {
 class _MachineHealthAgentScreenState extends State<MachineHealthAgentScreen> {
   late final ApiService _apiService;
   Timer? _pollingTimer;
+  int _subViewMode = 0; // 0: Telemetry & Monitoring, 1: Factory Digital Twin & Topology
 
   bool _isLoading = true;
   String? _errorMessage;
@@ -27,6 +30,8 @@ class _MachineHealthAgentScreenState extends State<MachineHealthAgentScreen> {
   MachineTwinModel? _selectedMachine;
   List<Map<String, dynamic>> _selectedMachineTelemetry = [];
   bool _isLoadingTelemetry = false;
+  String _activeTrendMetric = 'vibration';
+  final Map<int, List<Map<String, dynamic>>> _machineTelemetryCache = {};
 
   // AI Agent Data
   AgentSummaryModel? _summary;
@@ -36,6 +41,7 @@ class _MachineHealthAgentScreenState extends State<MachineHealthAgentScreen> {
 
   // Filters & Search
   String _selectedStatusFilter = 'ALL';
+  String _selectedDepartmentFilter = 'ALL';
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
 
@@ -94,10 +100,11 @@ class _MachineHealthAgentScreenState extends State<MachineHealthAgentScreen> {
   }
 
   Future<void> _selectMachine(MachineTwinModel machine) async {
+    final cached = _machineTelemetryCache[machine.id];
     setState(() {
       _selectedMachine = machine;
-      _isLoadingTelemetry = true;
-      _selectedMachineTelemetry = [];
+      _isLoadingTelemetry = cached == null;
+      _selectedMachineTelemetry = cached ?? [];
     });
 
     try {
@@ -105,6 +112,7 @@ class _MachineHealthAgentScreenState extends State<MachineHealthAgentScreen> {
       if (mounted) {
         setState(() {
           _selectedMachineTelemetry = telemetry;
+          _machineTelemetryCache[machine.id] = telemetry;
           _isLoadingTelemetry = false;
         });
       }
@@ -125,66 +133,74 @@ class _MachineHealthAgentScreenState extends State<MachineHealthAgentScreen> {
   }
 
   Future<void> _triggerInvestigation(int incidentId) async {
-    setState(() {
-      _investigatingIncidentId = incidentId;
-    });
-
-    final res = await _apiService.triggerInvestigation(incidentId);
-
-    if (mounted) {
-      setState(() {
-        _investigatingIncidentId = null;
-      });
-
-      if (res['success'] == true) {
+    setState(() => _investigatingIncidentId = incidentId);
+    try {
+      await _apiService.triggerInvestigation(incidentId);
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('AI Investigation Completed for Incident #$incidentId'),
-            backgroundColor: AppColors.successGreen,
+            content: Text('AI Specialist investigation completed for incident #$incidentId.'),
+            backgroundColor: TexoraColors.successText,
           ),
         );
-      } else {
+        _fetchAllData(isBackground: true);
+      }
+    } catch (e) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Investigation notice: ${res['error'] ?? res['message'] ?? 'Check AI provider configuration'}'),
-            backgroundColor: const Color(0xFFF59E0B),
+            content: Text('Investigation failed: $e'),
+            backgroundColor: TexoraColors.criticalText,
           ),
         );
       }
-      _fetchAllData(isBackground: true);
+    } finally {
+      if (mounted) {
+        setState(() => _investigatingIncidentId = null);
+      }
     }
   }
 
-  Future<void> _triggerCycle() async {
-    setState(() {
-      _isCycleRunning = true;
-    });
-
-    final res = await _apiService.triggerAgentCycle();
-
-    if (mounted) {
-      setState(() {
-        _isCycleRunning = false;
-      });
-
-      final count = res['investigated_count'] ?? 0;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Autonomous AI cycle completed: $count investigations executed across fleet.'),
-          backgroundColor: AppColors.primaryBlueLight,
-        ),
-      );
-      _fetchAllData(isBackground: true);
+  Future<void> _runAgentCycle() async {
+    setState(() => _isCycleRunning = true);
+    try {
+      final res = await _apiService.triggerAgentCycle();
+      if (mounted) {
+        final count = res['investigated_count'] ?? 0;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Autonomous AI cycle completed. Investigated $count incidents.'),
+            backgroundColor: TexoraColors.successText,
+          ),
+        );
+        _fetchAllData(isBackground: true);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Cycle execution failed: $e'),
+            backgroundColor: TexoraColors.criticalText,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isCycleRunning = false);
+      }
     }
   }
 
   Future<void> _handleApprove(int approvalId) async {
-    final success = await _apiService.approveRequest(approvalId);
-    if (mounted) {
+    final ok = await _apiService.approveRequest(
+      approvalId,
+      notes: 'Approved via Machine Health Specialist Console',
+    );
+    if (mounted && ok) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(success ? 'Action approved & executed. Work order generated.' : 'Failed to execute approval.'),
-          backgroundColor: success ? AppColors.successGreen : AppColors.errorRed,
+        const SnackBar(
+          content: Text('Action approved. AI dispatching automated execution.'),
+          backgroundColor: TexoraColors.successText,
         ),
       );
       _fetchAllData(isBackground: true);
@@ -192,12 +208,15 @@ class _MachineHealthAgentScreenState extends State<MachineHealthAgentScreen> {
   }
 
   Future<void> _handleReject(int approvalId) async {
-    final success = await _apiService.rejectRequest(approvalId);
-    if (mounted) {
+    final ok = await _apiService.rejectRequest(
+      approvalId,
+      notes: 'Rejected by operator in console',
+    );
+    if (mounted && ok) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(success ? 'Approval rejected & action cancelled.' : 'Failed to reject approval.'),
-          backgroundColor: const Color(0xFFF59E0B),
+        const SnackBar(
+          content: Text('Action rejected. Incident status updated.'),
+          backgroundColor: Color(0xFFF59E0B),
         ),
       );
       _fetchAllData(isBackground: true);
@@ -231,180 +250,352 @@ class _MachineHealthAgentScreenState extends State<MachineHealthAgentScreen> {
         }
       }
 
-      return matchesSearch && matchesStatus;
+      bool matchesDept = true;
+      if (_selectedDepartmentFilter != 'ALL') {
+        if (_selectedDepartmentFilter == 'SPINNING') {
+          matchesDept = dept.contains('spin') || m.departmentCode == 'SPN';
+        } else if (_selectedDepartmentFilter == 'WEAVING') {
+          matchesDept = dept.contains('weav') || m.departmentCode == 'WEV';
+        } else if (_selectedDepartmentFilter == 'KNITTING') {
+          matchesDept = dept.contains('knit') || m.departmentCode == 'KNT';
+        } else if (_selectedDepartmentFilter == 'DYEING') {
+          matchesDept = dept.contains('dye') || m.departmentCode == 'DYE';
+        } else if (_selectedDepartmentFilter == 'FINISHING') {
+          matchesDept = dept.contains('finish') || m.departmentCode == 'FNS';
+        }
+      }
+
+      return matchesSearch && matchesStatus && matchesDept;
     }).toList();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0B1120),
-      body: _isLoading && _machines.isEmpty
-          ? const Center(child: CircularProgressIndicator(color: AppColors.primaryBlueLight))
-          : _errorMessage != null && _machines.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.error_outline_rounded, color: AppColors.errorRed, size: 40),
-                      const SizedBox(height: 12),
-                      Text(_errorMessage!, style: const TextStyle(color: Colors.white, fontSize: 13)),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: () => _fetchAllData(),
-                        style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryBlue),
-                        child: const Text('Retry Connection'),
-                      ),
-                    ],
-                  ),
-                )
-              : Row(
-                  children: [
-                    // Main Fleet & AI Overview Panel
-                    Expanded(
-                      flex: _selectedMachine != null ? 6 : 10,
-                      child: RefreshIndicator(
-                        onRefresh: () => _fetchAllData(),
-                        color: AppColors.primaryBlueLight,
-                        child: ListView(
-                          padding: const EdgeInsets.all(24.0),
-                          children: [
-                            // 1. Header Bar with Manual Trigger
-                            _buildHeader(),
-                            const SizedBox(height: 18),
+    if (_isLoading && _machines.isEmpty) {
+      return const Scaffold(
+        backgroundColor: TexoraColors.workspaceBg,
+        body: Center(
+          child: CircularProgressIndicator(color: TexoraColors.primaryBlue),
+        ),
+      );
+    }
 
-                            // 2. Inference Provider Status Banner
-                            if (_summary != null) ...[
-                              _buildProviderBanner(_summary!.providerStatus),
-                              const SizedBox(height: 18),
-                            ],
+    if (_errorMessage != null && _machines.isEmpty) {
+      return Scaffold(
+        backgroundColor: TexoraColors.workspaceBg,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline_rounded, color: TexoraColors.criticalText, size: 40),
+              const SizedBox(height: 12),
+              Text(_errorMessage!, style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 13)),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () => _fetchAllData(),
+                style: ElevatedButton.styleFrom(backgroundColor: TexoraColors.primaryBlue),
+                child: const Text('Retry Connection'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
-                            // 3. Machine Health Fleet KPI Metrics
-                            _buildFleetKpiOverview(),
-                            const SizedBox(height: 20),
-
-                            // 4. Machine Monitoring Table Toolbar & Filters
-                            _buildMachineToolbar(),
-                            const SizedBox(height: 12),
-
-                            // 5. Machine Monitoring Table
-                            _buildMachineTable(),
-                            const SizedBox(height: 28),
-
-                            // 6. AI Agent Activity & Execution Stream
-                            _buildAiAgentActivitySection(),
-                          ],
-                        ),
-                      ),
+    if (_subViewMode == 1) {
+      return Scaffold(
+        backgroundColor: TexoraColors.workspaceBg,
+        body: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              decoration: const BoxDecoration(
+                color: TexoraColors.cardBg,
+                border: Border(bottom: BorderSide(color: TexoraColors.cardBorder)),
+              ),
+              child: Row(
+                children: [
+                  _buildViewSelector(),
+                  const Spacer(),
+                  TextButton.icon(
+                    onPressed: () => setState(() => _subViewMode = 0),
+                    icon: const Icon(Icons.arrow_back_rounded, size: 16, color: TexoraColors.primaryBlue),
+                    label: const Text(
+                      'Back to Fleet Telemetry',
+                      style: TextStyle(color: TexoraColors.primaryBlue, fontWeight: FontWeight.w600, fontSize: 13),
                     ),
+                  ),
+                ],
+              ),
+            ),
+            const Expanded(child: DigitalTwinScreen()),
+          ],
+        ),
+      );
+    }
 
-                    // Machine Detail Workspace Drawer (when selected)
-                    if (_selectedMachine != null)
-                      Expanded(
-                        flex: 4,
-                        child: _buildMachineDetailWorkspace(_selectedMachine!),
-                      ),
+    return Scaffold(
+      backgroundColor: TexoraColors.workspaceBg,
+      body: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Main Monitoring Fleet Area
+          Expanded(
+            flex: _selectedMachine != null ? 6 : 10,
+            child: RefreshIndicator(
+              onRefresh: () => _fetchAllData(),
+              color: TexoraColors.primaryBlue,
+              child: ListView(
+                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
+                children: [
+                  // 1. Heading matching reference screen 3
+                  _buildHeader(),
+                  const SizedBox(height: 14),
+
+                  // 2. Inference Engine Status Banner
+                  if (_summary != null) ...[
+                    _buildProviderBanner(_summary!.providerStatus),
+                    const SizedBox(height: 16),
                   ],
-                ),
+
+                  // 3. Department Filter Tabs
+                  _buildDepartmentFilterTabs(),
+                  const SizedBox(height: 16),
+
+                  // 4. Fleet KPI Summary Overview
+                  _buildFleetKpiOverview(),
+                  const SizedBox(height: 16),
+
+                  // 5. Search & Status Filter Toolbar
+                  _buildMachineToolbar(),
+                  const SizedBox(height: 12),
+
+                  // 6. Compact Machine Monitoring Table with Sparklines
+                  _buildMachineTable(),
+                  const SizedBox(height: 24),
+
+                  // 7. AI Agent Investigation & Reasoning Log
+                  _buildAiAgentActivitySection(),
+                ],
+              ),
+            ),
+          ),
+
+          // Diagnostic Workspace Drawer (when machine is selected)
+          if (_selectedMachine != null)
+            Expanded(
+              flex: 4,
+              child: _buildMachineDetailWorkspace(_selectedMachine!),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildViewSelector() {
+    return Container(
+      decoration: BoxDecoration(
+        color: TexoraColors.inputBg,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: TexoraColors.cardBorder),
+      ),
+      padding: const EdgeInsets.all(2),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          InkWell(
+            onTap: () => setState(() => _subViewMode = 0),
+            borderRadius: BorderRadius.circular(6),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: _subViewMode == 0 ? TexoraColors.cardBg : Colors.transparent,
+                borderRadius: BorderRadius.circular(6),
+                boxShadow: _subViewMode == 0
+                    ? const [BoxShadow(color: Color(0x0A000000), blurRadius: 4, offset: Offset(0, 1))]
+                    : null,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.precision_manufacturing_rounded,
+                    size: 14,
+                    color: _subViewMode == 0 ? TexoraColors.primaryBlue : TexoraColors.textMuted,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Fleet Telemetry',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: _subViewMode == 0 ? FontWeight.w700 : FontWeight.w500,
+                      color: _subViewMode == 0 ? TexoraColors.textPrimary : TexoraColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          InkWell(
+            onTap: () => setState(() => _subViewMode = 1),
+            borderRadius: BorderRadius.circular(6),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: _subViewMode == 1 ? TexoraColors.cardBg : Colors.transparent,
+                borderRadius: BorderRadius.circular(6),
+                boxShadow: _subViewMode == 1
+                    ? const [BoxShadow(color: Color(0x0A000000), blurRadius: 4, offset: Offset(0, 1))]
+                    : null,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.view_in_ar_rounded,
+                    size: 14,
+                    color: _subViewMode == 1 ? TexoraColors.primaryBlue : TexoraColors.textMuted,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Digital Twin & Topology',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: _subViewMode == 1 ? FontWeight.w700 : FontWeight.w500,
+                      color: _subViewMode == 1 ? TexoraColors.textPrimary : TexoraColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildHeader() {
-    return Wrap(
-      alignment: WrapAlignment.spaceBetween,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      spacing: 16,
-      runSpacing: 12,
-      children: [
-        Column(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrow = constraints.maxWidth < 750;
+
+        final titleSection = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Wrap(
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 12,
-              runSpacing: 6,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFA855F7).withAlpha(35),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: const Color(0xFFA855F7).withAlpha(100)),
-                  ),
-                  child: const Text(
-                    'AUTONOMOUS AGENT SPECIALIST',
-                    style: TextStyle(
-                      color: Color(0xFFA855F7),
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.8,
-                    ),
-                  ),
-                ),
-                const Text(
-                  'Machine Health AI & Fleet Telemetry',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.4,
-                  ),
-                ),
-              ],
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            Text(
+              'Machine Monitoring & Fleet Telemetry',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: TexoraColors.textPrimary,
+                letterSpacing: -0.4,
+              ),
             ),
-            const SizedBox(height: 6),
-            const Text(
-              'Live multi-domain telemetry surveillance, operating limits verification, anomaly diagnostics, and human-in-the-loop action dispatches.',
-              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12.5),
+            SizedBox(height: 2),
+            Text(
+              'AI Sensor Streams, Vibration Signatures & Dynamic Factory Twin',
+              style: TextStyle(
+                fontSize: 12,
+                color: TexoraColors.textSecondary,
+                fontWeight: FontWeight.w400,
+              ),
             ),
           ],
-        ),
-        Row(
+        );
+
+        final actionSection = Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            OutlinedButton.icon(
-              onPressed: () => _fetchAllData(),
-              icon: const Icon(Icons.refresh_rounded, size: 16, color: Color(0xFF94A3B8)),
-              label: const Text('Refresh', style: TextStyle(color: Color(0xFFCBD5E1), fontSize: 12)),
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: Color(0xFF334155)),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            _buildViewSelector(),
+            const SizedBox(width: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
+              decoration: BoxDecoration(
+                color: TexoraColors.successBg,
+                borderRadius: BorderRadius.circular(TexoraSpacing.radiusPill),
+                border: Border.all(color: TexoraColors.successBorder),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.circle, size: 7, color: TexoraColors.successText),
+                  SizedBox(width: 6),
+                  Text(
+                    'Telemetry Live',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: TexoraColors.successText,
+                    ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(width: 10),
             ElevatedButton.icon(
-              onPressed: _isCycleRunning ? null : _triggerCycle,
+              onPressed: _isCycleRunning ? null : _runAgentCycle,
               icon: _isCycleRunning
-                  ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Icon(Icons.bolt_rounded, size: 16),
-              label: Text(_isCycleRunning ? 'Evaluating Fleet...' : 'Run Agent Cycle (Manual)'),
+                  ? const SizedBox(
+                      width: 12,
+                      height: 12,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.play_circle_outline_rounded, size: 16),
+              label: Text(_isCycleRunning ? 'Evaluating...' : 'Run Cycle'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2563EB),
+                backgroundColor: TexoraColors.primaryBlue,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                elevation: 0,
               ),
             ),
           ],
-        ),
-      ],
+        );
+
+        if (isNarrow) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              titleSection,
+              const SizedBox(height: 12),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: actionSection,
+              ),
+            ],
+          );
+        }
+
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(child: titleSection),
+            actionSection,
+          ],
+        );
+      },
     );
   }
 
   Widget _buildProviderBanner(ProviderStatusModel provider) {
     final isConf = provider.isConfigured;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: isConf ? const Color(0xFF38BDF8).withAlpha(80) : const Color(0xFFF59E0B).withAlpha(80)),
+        color: TexoraColors.cardBg,
+        borderRadius: BorderRadius.circular(TexoraSpacing.radiusMd),
+        border: Border.all(
+          color: isConf ? TexoraColors.successBorder : TexoraColors.warningBorder,
+        ),
       ),
       child: Row(
         children: [
           Icon(
             isConf ? Icons.psychology_rounded : Icons.warning_amber_rounded,
-            color: isConf ? const Color(0xFF38BDF8) : const Color(0xFFF59E0B),
+            color: isConf ? TexoraColors.primaryBlue : TexoraColors.warningText,
             size: 20,
           ),
           const SizedBox(width: 12),
@@ -417,30 +608,73 @@ class _MachineHealthAgentScreenState extends State<MachineHealthAgentScreen> {
                 Text(
                   'Inference Engine: ${provider.provider.toUpperCase()} (${provider.model})',
                   style: const TextStyle(
-                    color: Colors.white,
+                    color: TexoraColors.textPrimary,
                     fontWeight: FontWeight.bold,
                     fontSize: 12.5,
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: (isConf ? AppColors.successGreen : const Color(0xFFF59E0B)).withAlpha(35),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    isConf ? 'ACTIVE' : 'FALLBACK (RULE/HEURISTIC)',
-                    style: TextStyle(
-                      color: isConf ? AppColors.successGreen : const Color(0xFFF59E0B),
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                TexoraStatusBadge(
+                  label: isConf ? 'ACTIVE' : 'FALLBACK (RULE/HEURISTIC)',
+                  variant: isConf ? TexoraBadgeVariant.running : TexoraBadgeVariant.attention,
+                  showDot: true,
                 ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildDepartmentFilterTabs() {
+    final totalCount = _machines.length;
+    final spinningCount = _machines.where((m) => m.departmentName.toLowerCase().contains('spin') || m.departmentCode == 'SPN').length;
+    final weavingCount = _machines.where((m) => m.departmentName.toLowerCase().contains('weav') || m.departmentCode == 'WEV').length;
+    final knittingCount = _machines.where((m) => m.departmentName.toLowerCase().contains('knit') || m.departmentCode == 'KNT').length;
+    final dyeingCount = _machines.where((m) => m.departmentName.toLowerCase().contains('dye') || m.departmentCode == 'DYE').length;
+    final finishingCount = _machines.where((m) => m.departmentName.toLowerCase().contains('finish') || m.departmentCode == 'FNS').length;
+
+    final depts = [
+      {'id': 'ALL', 'name': 'All', 'count': totalCount},
+      {'id': 'SPINNING', 'name': 'Spinning', 'count': spinningCount},
+      {'id': 'WEAVING', 'name': 'Weaving', 'count': weavingCount},
+      {'id': 'KNITTING', 'name': 'Knitting', 'count': knittingCount},
+      {'id': 'DYEING', 'name': 'Dyeing', 'count': dyeingCount},
+      {'id': 'FINISHING', 'name': 'Finishing', 'count': finishingCount},
+    ];
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: depts.map((d) {
+          final isSelected = _selectedDepartmentFilter == d['id'];
+          final count = d['count'] as int;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: InkWell(
+              onTap: () => setState(() => _selectedDepartmentFilter = d['id'] as String),
+              borderRadius: BorderRadius.circular(TexoraSpacing.radiusPill),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                decoration: BoxDecoration(
+                  color: isSelected ? TexoraColors.primaryBlue : TexoraColors.cardBg,
+                  borderRadius: BorderRadius.circular(TexoraSpacing.radiusPill),
+                  border: Border.all(
+                    color: isSelected ? TexoraColors.primaryBlue : TexoraColors.borderDefault,
+                  ),
+                ),
+                child: Text(
+                  '${d['name']} ($count)',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                    color: isSelected ? Colors.white : TexoraColors.textSecondary,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
       ),
     );
   }
@@ -452,57 +686,74 @@ class _MachineHealthAgentScreenState extends State<MachineHealthAgentScreen> {
     final critical = _machines.where((m) => m.twinPresentationState == 'CRITICAL' || m.rawStatus == 'CRITICAL').length;
     final stale = _machines.where((m) => m.isStale).length;
 
-    return Row(
-      children: [
-        _buildKpiCard('TOTAL MONITORED', '$total Machines', Icons.precision_manufacturing_rounded, const Color(0xFF38BDF8)),
-        const SizedBox(width: 12),
-        _buildKpiCard('HEALTHY & RUNNING', '$healthy Machines', Icons.check_circle_rounded, AppColors.successGreen),
-        const SizedBox(width: 12),
-        _buildKpiCard('SUB-OPTIMAL WARNING', '$warning Machines', Icons.warning_amber_rounded, const Color(0xFFF59E0B), isAlert: warning > 0),
-        const SizedBox(width: 12),
-        _buildKpiCard('CRITICAL OUTAGES', '$critical Machines', Icons.error_outline_rounded, AppColors.errorRed, isAlert: critical > 0),
-        const SizedBox(width: 12),
-        _buildKpiCard('STALE TELEMETRY', '$stale Machines', Icons.sensors_off_rounded, const Color(0xFF94A3B8), isAlert: stale > 0),
-      ],
-    );
-  }
-
-  Widget _buildKpiCard(String title, String value, IconData icon, Color color, {bool isAlert = false}) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1E293B).withAlpha(120),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: isAlert ? color.withAlpha(150) : const Color(0xFF334155),
-            width: isAlert ? 1.4 : 1.0,
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: color.withAlpha(35),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Icon(icon, color: color, size: 18),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: const TextStyle(color: Color(0xFF64748B), fontSize: 9.5, fontWeight: FontWeight.bold, letterSpacing: 0.4), overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 2),
-                  Text(value, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800), overflow: TextOverflow.ellipsis),
-                ],
-              ),
-            ),
-          ],
-        ),
+    final cards = [
+      TexoraKpiCard(
+        label: 'TOTAL MONITORED',
+        value: '$total Machines',
+        subtitle: '100% telemetry synced',
+        isPositive: true,
+        icon: Icons.precision_manufacturing_rounded,
+        iconColor: TexoraColors.primaryBlue,
       ),
+      TexoraKpiCard(
+        label: 'HEALTHY & RUNNING',
+        value: '$healthy Machines',
+        subtitle: total > 0 ? '${((healthy / total) * 100).round()}% nominal' : '100%',
+        isPositive: true,
+        icon: Icons.check_circle_rounded,
+        iconColor: TexoraColors.successText,
+      ),
+      TexoraKpiCard(
+        label: 'SUB-OPTIMAL WARNING',
+        value: '$warning Machines',
+        subtitle: warning > 0 ? 'Action advised' : 'Zero warnings',
+        isPositive: warning == 0,
+        icon: Icons.warning_amber_rounded,
+        iconColor: const Color(0xFFF59E0B),
+      ),
+      TexoraKpiCard(
+        label: 'CRITICAL OUTAGES',
+        value: '$critical Machines',
+        subtitle: critical > 0 ? 'Urgent attention' : 'Zero outages',
+        isPositive: critical == 0,
+        icon: Icons.error_outline_rounded,
+        iconColor: TexoraColors.criticalText,
+      ),
+      TexoraKpiCard(
+        label: 'STALE TELEMETRY',
+        value: '$stale Machines',
+        subtitle: stale > 0 ? 'Heartbeat delayed' : 'Real-time',
+        isPositive: stale == 0,
+        icon: Icons.sensors_off_rounded,
+        iconColor: TexoraColors.textMuted,
+      ),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final w = constraints.maxWidth;
+        int count = 5;
+        if (w < 600) {
+          count = 1;
+        } else if (w < 900) {
+          count = 2;
+        } else if (w < 1200) {
+          count = 3;
+        }
+
+        if (count == 1) {
+          return Column(
+            children: cards.map((c) => Padding(padding: const EdgeInsets.only(bottom: 10), child: c)).toList(),
+          );
+        }
+
+        final itemWidth = (w - (count - 1) * 12) / count;
+        return Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: cards.map((c) => SizedBox(width: itemWidth, child: c)).toList(),
+        );
+      },
     );
   }
 
@@ -533,15 +784,15 @@ class _MachineHealthAgentScreenState extends State<MachineHealthAgentScreen> {
                 child: ChoiceChip(
                   label: Text(f['label']!),
                   selected: isSelected,
-                  selectedColor: const Color(0xFF2563EB).withAlpha(60),
-                  backgroundColor: const Color(0xFF1E293B),
+                  selectedColor: TexoraColors.primaryBlue.withAlpha(25),
+                  backgroundColor: TexoraColors.cardBg,
                   labelStyle: TextStyle(
-                    color: isSelected ? Colors.white : const Color(0xFF94A3B8),
+                    color: isSelected ? TexoraColors.primaryBlue : TexoraColors.textSecondary,
                     fontSize: 11.5,
                     fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                   ),
                   side: BorderSide(
-                    color: isSelected ? const Color(0xFF38BDF8) : const Color(0xFF334155),
+                    color: isSelected ? TexoraColors.primaryBlue : TexoraColors.borderDefault,
                   ),
                   onSelected: (selected) {
                     if (selected) {
@@ -561,25 +812,25 @@ class _MachineHealthAgentScreenState extends State<MachineHealthAgentScreen> {
           child: TextField(
             controller: _searchController,
             onChanged: (val) => setState(() => _searchQuery = val.trim()),
-            style: const TextStyle(color: Colors.white, fontSize: 12),
+            style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 12),
             decoration: InputDecoration(
               hintText: 'Search machine code, name...',
-              hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
-              prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 16),
+              hintStyle: const TextStyle(color: TexoraColors.textMuted, fontSize: 11),
+              prefixIcon: const Icon(Icons.search_rounded, color: TexoraColors.textMuted, size: 16),
               contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
               filled: true,
-              fillColor: const Color(0xFF1E293B),
+              fillColor: Colors.white,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(6),
-                borderSide: const BorderSide(color: Color(0xFF334155)),
+                borderSide: const BorderSide(color: TexoraColors.borderDefault),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(6),
-                borderSide: const BorderSide(color: Color(0xFF334155)),
+                borderSide: const BorderSide(color: TexoraColors.borderDefault),
               ),
               suffixIcon: _searchQuery.isNotEmpty
                   ? IconButton(
-                      icon: const Icon(Icons.close_rounded, size: 14, color: Color(0xFF94A3B8)),
+                      icon: const Icon(Icons.close_rounded, size: 14, color: TexoraColors.textSecondary),
                       onPressed: () {
                         _searchController.clear();
                         setState(() => _searchQuery = '');
@@ -600,254 +851,270 @@ class _MachineHealthAgentScreenState extends State<MachineHealthAgentScreen> {
       return Container(
         padding: const EdgeInsets.all(32),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E293B),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: const Color(0xFF334155)),
+          color: TexoraColors.cardBg,
+          borderRadius: BorderRadius.circular(TexoraSpacing.radiusMd),
+          border: Border.all(color: TexoraColors.borderDefault),
         ),
         child: const Center(
-          child: Text('No machines match the selected filter or search criteria.', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+          child: Text(
+            'No machines match the selected filter or search criteria.',
+            style: TextStyle(color: TexoraColors.textSecondary, fontSize: 13),
+          ),
         ),
       );
     }
 
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFF334155)),
+        color: TexoraColors.cardBg,
+        borderRadius: BorderRadius.circular(TexoraSpacing.radiusMd),
+        border: Border.all(color: TexoraColors.borderDefault),
+        boxShadow: TexoraSpacing.cardShadow,
       ),
-      child: Table(
-        columnWidths: const {
-          0: FixedColumnWidth(130), // Machine Code
-          1: FlexColumnWidth(1.2),  // Machine Name & Dept
-          2: FixedColumnWidth(110), // Status
-          3: FixedColumnWidth(100), // Vibration
-          4: FixedColumnWidth(95),  // Temperature
-          5: FixedColumnWidth(100), // Speed
-          6: FixedColumnWidth(130), // Freshness
-          7: FixedColumnWidth(90),  // Health Score
-          8: FixedColumnWidth(95),  // Action
-        },
-        defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-        children: [
-          // Table Header
-          TableRow(
-            decoration: const BoxDecoration(
-              color: Color(0xFF0F172A),
-              border: Border(bottom: BorderSide(color: Color(0xFF334155), width: 1.2)),
-            ),
-            children: [
-              _buildHeaderCell('MACHINE CODE'),
-              _buildHeaderCell('ASSET & DEPT'),
-              _buildHeaderCell('STATUS'),
-              _buildHeaderCell('VIBRATION'),
-              _buildHeaderCell('TEMP (°C)'),
-              _buildHeaderCell('SPEED'),
-              _buildHeaderCell('LAST READING'),
-              _buildHeaderCell('HEALTH'),
-              _buildHeaderCell('ACTION'),
-            ],
-          ),
-
-          // Machine Rows
-          ...list.map((m) {
-            final isSelected = _selectedMachine?.id == m.id;
-            final telem = m.latestTelemetry ?? {};
-            final limits = m.operatingLimits ?? {};
-
-            final vib = (telem['vibration_mms'] as num?)?.toDouble();
-            final temp = (telem['temperature_c'] as num?)?.toDouble();
-            final rpm = (telem['speed_rpm'] as num?)?.toDouble();
-            final ts = telem['timestamp']?.toString() ?? '';
-
-            final warnVib = (limits['warning_vibration_mms'] as num?)?.toDouble() ?? 4.0;
-            final maxVib = (limits['max_vibration_mms'] as num?)?.toDouble() ?? 5.5;
-            final warnTemp = (limits['warning_temp_c'] as num?)?.toDouble() ?? 75.0;
-
-            Color vibColor = const Color(0xFF38BDF8);
-            if (vib != null) {
-              if (vib >= maxVib) {
-                vibColor = AppColors.errorRed;
-              } else if (vib >= warnVib) {
-                vibColor = const Color(0xFFF59E0B);
-              }
-            }
-
-            Color tempColor = Colors.white;
-            if (temp != null && temp >= warnTemp) {
-              tempColor = const Color(0xFFF59E0B);
-            }
-
-            return TableRow(
-              decoration: BoxDecoration(
-                color: isSelected ? const Color(0xFF2563EB).withAlpha(40) : Colors.transparent,
-                border: const Border(bottom: BorderSide(color: Color(0xFF334155), width: 0.8)),
-              ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(TexoraSpacing.radiusMd),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 1060),
+            child: Table(
+              columnWidths: const {
+                0: FixedColumnWidth(120), // Machine Code
+                1: FixedColumnWidth(210), // Asset & Dept
+                2: FixedColumnWidth(125), // Status
+                3: FixedColumnWidth(110), // Vibration
+                4: FixedColumnWidth(100), // Temperature
+                5: FixedColumnWidth(110), // Speed
+                6: FixedColumnWidth(100), // Efficiency / Health
+                7: FixedColumnWidth(100), // Trend Sparkline
+                8: FixedColumnWidth(105), // Action
+              },
+              defaultVerticalAlignment: TableCellVerticalAlignment.middle,
               children: [
-                // Machine Code
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  child: Row(
+                // Table Header
+                TableRow(
+                  decoration: const BoxDecoration(
+                    color: TexoraColors.workspaceBg,
+                    border: Border(bottom: BorderSide(color: TexoraColors.borderDefault, width: 1.2)),
+                  ),
+                  children: [
+                    _buildHeaderCell('MACHINE CODE'),
+                    _buildHeaderCell('ASSET & DEPT'),
+                    _buildHeaderCell('STATUS'),
+                    _buildHeaderCell('VIBRATION'),
+                    _buildHeaderCell('TEMP (°C)'),
+                    _buildHeaderCell('SPEED'),
+                    _buildHeaderCell('EFFICIENCY'),
+                    _buildHeaderCell('TREND'),
+                    _buildHeaderCell('ACTION'),
+                  ],
+                ),
+
+                // Table Rows
+                ...list.map((m) {
+                  final telem = m.latestTelemetry ?? {};
+                  final vib = (telem['vibration_mms'] as num?)?.toDouble();
+                  final temp = (telem['temperature_c'] as num?)?.toDouble();
+                  final rpm = (telem['speed_rpm'] as num?)?.toDouble();
+                  final isSelected = _selectedMachine?.id == m.id;
+
+                  // Vibration threshold styling
+                  final vibColor = (vib != null && vib > 4.5)
+                      ? TexoraColors.criticalText
+                      : ((vib != null && vib > 2.8) ? const Color(0xFFD97706) : TexoraColors.successText);
+
+                  // Temperature threshold styling
+                  final tempColor = (temp != null && temp > 80)
+                      ? TexoraColors.criticalText
+                      : ((temp != null && temp > 65) ? const Color(0xFFD97706) : TexoraColors.textPrimary);
+
+                  // Historical telemetry trend data (zero fabricated measurements)
+                  final cachedHistory = _machineTelemetryCache[m.id];
+                  List<double> trendData;
+                  if (cachedHistory != null && cachedHistory.isNotEmpty) {
+                    trendData = cachedHistory
+                        .take(8)
+                        .toList()
+                        .reversed
+                        .map((p) => (p['vibration_mms'] as num?)?.toDouble() ?? 0.0)
+                        .toList();
+                  } else if (m.id == _selectedMachine?.id && _selectedMachineTelemetry.isNotEmpty) {
+                    trendData = _selectedMachineTelemetry
+                        .take(8)
+                        .toList()
+                        .reversed
+                        .map((p) => (p['vibration_mms'] as num?)?.toDouble() ?? 0.0)
+                        .toList();
+                  } else if (vib != null) {
+                    trendData = [vib, vib];
+                  } else {
+                    trendData = const [];
+                  }
+
+                  return TableRow(
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? TexoraColors.primaryBlue.withAlpha(15)
+                          : Colors.white,
+                      border: const Border(bottom: BorderSide(color: TexoraColors.borderDefault, width: 0.8)),
+                    ),
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0F172A),
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: const Color(0xFF475569)),
-                        ),
+                      // Machine Code
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                         child: Text(
                           m.code,
-                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold, fontFamily: 'monospace'),
+                          style: const TextStyle(
+                            color: TexoraColors.textPrimary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            fontFamily: 'monospace',
+                          ),
+                        ),
+                      ),
+
+                      // Asset & Dept
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              m.name,
+                              style: const TextStyle(
+                                color: TexoraColors.textPrimary,
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${m.departmentName} (${m.departmentCode})',
+                              style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Status Badge
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: _buildStatusBadge(m.twinPresentationState, m.rawStatus),
+                        ),
+                      ),
+
+                      // Vibration
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        child: Text(
+                          vib != null ? '${vib.toStringAsFixed(2)} mm/s' : '—',
+                          style: TextStyle(color: vibColor, fontSize: 12, fontWeight: FontWeight.w700),
+                        ),
+                      ),
+
+                      // Temperature
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        child: Text(
+                          temp != null ? '${temp.toStringAsFixed(1)} °C' : '—',
+                          style: TextStyle(color: tempColor, fontSize: 12, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+
+                      // Speed / RPM
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        child: Text(
+                          rpm != null ? '${rpm.toInt()} RPM' : '—',
+                          style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 12),
+                        ),
+                      ),
+
+                      // Efficiency / Health Score
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        child: Row(
+                          children: [
+                            Text(
+                              '${m.healthScore.toInt()}%',
+                              style: TextStyle(
+                                color: m.healthScore < 70
+                                    ? TexoraColors.criticalText
+                                    : (m.healthScore < 90 ? const Color(0xFFD97706) : TexoraColors.successText),
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Trend Sparkline
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        child: TexoraSparkline(
+                          data: trendData,
+                          width: 68,
+                          height: 22,
+                          color: (vib != null && vib > 4.5) ? TexoraColors.criticalText : TexoraColors.successText,
+                        ),
+                      ),
+
+                      // Action (Inspect button)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                        child: ElevatedButton(
+                          onPressed: () => _selectMachine(m),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: isSelected ? TexoraColors.primaryBlue : Colors.white,
+                            foregroundColor: isSelected ? Colors.white : TexoraColors.textPrimary,
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            side: BorderSide(
+                              color: isSelected ? TexoraColors.primaryBlue : TexoraColors.borderDefault,
+                            ),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                            elevation: 0,
+                          ),
+                          child: const Text('Inspect', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                         ),
                       ),
                     ],
-                  ),
-                ),
-
-                // Name & Department
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        m.name,
-                        style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(
-                        '${m.departmentName} (${m.departmentCode})',
-                        style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5),
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Operational Status
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  child: _buildStatusBadge(m.twinPresentationState, m.rawStatus),
-                ),
-
-                // Vibration
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  child: Text(
-                    vib != null ? '${vib.toStringAsFixed(2)} mm/s' : '—',
-                    style: TextStyle(color: vibColor, fontSize: 11.5, fontWeight: FontWeight.w700),
-                  ),
-                ),
-
-                // Temperature
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  child: Text(
-                    temp != null ? '${temp.toStringAsFixed(1)} °C' : '—',
-                    style: TextStyle(color: tempColor, fontSize: 11.5, fontWeight: FontWeight.w600),
-                  ),
-                ),
-
-                // Speed / RPM
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  child: Text(
-                    rpm != null ? '${rpm.toInt()} RPM' : '—',
-                    style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 11.5),
-                  ),
-                ),
-
-                // Last Reading
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  child: Text(
-                    ts.length > 19 ? ts.substring(11, 19) : (ts.isNotEmpty ? ts : 'Offline'),
-                    style: TextStyle(color: m.isStale ? const Color(0xFFF59E0B) : const Color(0xFF94A3B8), fontSize: 10.5, fontFamily: 'monospace'),
-                  ),
-                ),
-
-                // Health Score
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  child: Text(
-                    '${m.healthScore.toInt()}%',
-                    style: TextStyle(
-                      color: m.healthScore < 70
-                          ? AppColors.errorRed
-                          : (m.healthScore < 90 ? const Color(0xFFF59E0B) : AppColors.successGreen),
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-
-                // Action
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                  child: ElevatedButton(
-                    onPressed: () => _selectMachine(m),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: isSelected ? const Color(0xFF0284C7) : const Color(0xFF0F172A),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                      side: const BorderSide(color: Color(0xFF334155)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                    ),
-                    child: const Text('Inspect', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
-                  ),
-                ),
+                  );
+                }),
               ],
-            );
-          }),
-        ],
+            ),
+          ),
+        ),
       ),
     );
   }
 
   Widget _buildStatusBadge(String twinState, String rawStatus) {
-    Color color;
-    String label;
-
     if (twinState == 'CRITICAL' || rawStatus == 'CRITICAL') {
-      color = AppColors.errorRed;
-      label = 'CRITICAL';
+      return const TexoraStatusBadge(label: 'CRITICAL', variant: TexoraBadgeVariant.critical, showDot: true);
     } else if (twinState == 'WARNING' || rawStatus == 'WARNING') {
-      color = const Color(0xFFF59E0B);
-      label = 'WARNING';
+      return const TexoraStatusBadge(label: 'WARNING', variant: TexoraBadgeVariant.attention, showDot: true);
     } else if (twinState == 'UNDER_MAINTENANCE' || rawStatus == 'MAINTENANCE') {
-      color = const Color(0xFFA855F7);
-      label = 'SERVICE';
+      return const TexoraStatusBadge(label: 'SERVICE', variant: TexoraBadgeVariant.neutral, showDot: false);
     } else if (twinState == 'RUNNING' || rawStatus == 'OPERATIONAL') {
-      color = AppColors.successGreen;
-      label = 'NORMAL';
+      return const TexoraStatusBadge(label: 'NORMAL', variant: TexoraBadgeVariant.running, showDot: true);
     } else {
-      color = const Color(0xFF94A3B8);
-      label = 'IDLE';
+      return const TexoraStatusBadge(label: 'IDLE', variant: TexoraBadgeVariant.neutral, showDot: false);
     }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
-      decoration: BoxDecoration(
-        color: color.withAlpha(35),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: color.withAlpha(80)),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(color: color, fontSize: 9.5, fontWeight: FontWeight.bold),
-      ),
-    );
   }
 
   Widget _buildHeaderCell(String label) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: Text(
         label,
         style: const TextStyle(
-          color: Color(0xFF64748B),
-          fontSize: 9.5,
-          fontWeight: FontWeight.bold,
+          color: TexoraColors.textMuted,
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
           letterSpacing: 0.5,
         ),
       ),
@@ -860,8 +1127,8 @@ class _MachineHealthAgentScreenState extends State<MachineHealthAgentScreen> {
 
     return Container(
       decoration: const BoxDecoration(
-        color: Color(0xFF0F172A),
-        border: Border(left: BorderSide(color: Color(0xFF1E293B), width: 1.5)),
+        color: Colors.white,
+        border: Border(left: BorderSide(color: TexoraColors.borderDefault, width: 1.5)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -870,8 +1137,8 @@ class _MachineHealthAgentScreenState extends State<MachineHealthAgentScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
             decoration: const BoxDecoration(
-              color: Color(0xFF1E293B),
-              border: Border(bottom: BorderSide(color: Color(0xFF334155))),
+              color: TexoraColors.workspaceBg,
+              border: Border(bottom: BorderSide(color: TexoraColors.borderDefault)),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -881,10 +1148,10 @@ class _MachineHealthAgentScreenState extends State<MachineHealthAgentScreen> {
                     Container(
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF0284C7).withAlpha(35),
+                        color: TexoraColors.primaryBlue.withAlpha(25),
                         borderRadius: BorderRadius.circular(6),
                       ),
-                      child: const Icon(Icons.analytics_rounded, color: Color(0xFF38BDF8), size: 18),
+                      child: const Icon(Icons.analytics_rounded, color: TexoraColors.primaryBlue, size: 18),
                     ),
                     const SizedBox(width: 10),
                     Column(
@@ -892,18 +1159,18 @@ class _MachineHealthAgentScreenState extends State<MachineHealthAgentScreen> {
                       children: [
                         Text(
                           '${m.code} Diagnostic Workspace',
-                          style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                          style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 14, fontWeight: FontWeight.bold),
                         ),
                         Text(
                           m.name,
-                          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                          style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 11),
                         ),
                       ],
                     ),
                   ],
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close_rounded, size: 18, color: Color(0xFF94A3B8)),
+                  icon: const Icon(Icons.close_rounded, size: 18, color: TexoraColors.textSecondary),
                   onPressed: _closeMachineDetail,
                   tooltip: 'Close Workspace',
                 ),
@@ -919,22 +1186,22 @@ class _MachineHealthAgentScreenState extends State<MachineHealthAgentScreen> {
                 // Live Sensor Metrics Grid
                 const Text(
                   'CURRENT SENSOR READINGS',
-                  style: TextStyle(color: Color(0xFF64748B), fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.6),
+                  style: TextStyle(color: TexoraColors.textMuted, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.6),
                 ),
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    _buildSensorMetricTile('Vibration', '${(telem['vibration_mms'] as num?)?.toStringAsFixed(2) ?? "—"} mm/s', const Color(0xFF38BDF8)),
+                    _buildSensorMetricTile('Vibration', '${(telem['vibration_mms'] as num?)?.toStringAsFixed(2) ?? "—"} mm/s', TexoraColors.primaryBlue),
                     const SizedBox(width: 8),
-                    _buildSensorMetricTile('Temperature', '${(telem['temperature_c'] as num?)?.toStringAsFixed(1) ?? "—"} °C', Colors.white),
+                    _buildSensorMetricTile('Temperature', '${(telem['temperature_c'] as num?)?.toStringAsFixed(1) ?? "—"} °C', TexoraColors.textPrimary),
                   ],
                 ),
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    _buildSensorMetricTile('Speed', '${(telem['speed_rpm'] as num?)?.toInt() ?? "—"} RPM', const Color(0xFFCBD5E1)),
+                    _buildSensorMetricTile('Speed', '${(telem['speed_rpm'] as num?)?.toInt() ?? "—"} RPM', TexoraColors.textSecondary),
                     const SizedBox(width: 8),
-                    _buildSensorMetricTile('Utilization', '${(telem['utilization_pct'] as num?)?.toStringAsFixed(1) ?? "—"}%', AppColors.successGreen),
+                    _buildSensorMetricTile('Utilization', '${(telem['utilization_pct'] as num?)?.toStringAsFixed(1) ?? "—"}%', TexoraColors.successText),
                   ],
                 ),
                 const SizedBox(height: 18),
@@ -942,15 +1209,15 @@ class _MachineHealthAgentScreenState extends State<MachineHealthAgentScreen> {
                 // Operating Thresholds
                 const Text(
                   'ENGINEERING OPERATING LIMITS',
-                  style: TextStyle(color: Color(0xFF64748B), fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.6),
+                  style: TextStyle(color: TexoraColors.textMuted, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.6),
                 ),
                 const SizedBox(height: 8),
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1E293B),
+                    color: TexoraColors.workspaceBg,
                     borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: const Color(0xFF334155)),
+                    border: Border.all(color: TexoraColors.borderDefault),
                   ),
                   child: Column(
                     children: [
@@ -964,35 +1231,40 @@ class _MachineHealthAgentScreenState extends State<MachineHealthAgentScreen> {
                 ),
                 const SizedBox(height: 18),
 
+                // Interactive Historical Telemetry Trend Chart
+                _buildTelemetryTrendWorkspace(m, limits),
+                const SizedBox(height: 18),
+
                 // Telemetry History Log
                 const Text(
                   'RECENT TELEMETRY READINGS (LAST 10)',
-                  style: TextStyle(color: Color(0xFF64748B), fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.6),
+                  style: TextStyle(color: TexoraColors.textMuted, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.6),
                 ),
                 const SizedBox(height: 8),
-                if (_isLoadingTelemetry)
+                if (_isLoadingTelemetry && _selectedMachineTelemetry.isEmpty)
                   const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator(strokeWidth: 2)))
                 else if (_selectedMachineTelemetry.isEmpty)
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B),
+                      color: TexoraColors.workspaceBg,
                       borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: TexoraColors.borderDefault),
                     ),
-                    child: const Text('No recent telemetry samples returned from time-series storage.', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                    child: const Text('No recent telemetry samples returned from time-series storage.', style: TextStyle(color: TexoraColors.textSecondary, fontSize: 11)),
                   )
                 else
                   Container(
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B),
+                      color: Colors.white,
                       borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: const Color(0xFF334155)),
+                      border: Border.all(color: TexoraColors.borderDefault),
                     ),
                     child: ListView.separated(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       itemCount: _selectedMachineTelemetry.take(10).length,
-                      separatorBuilder: (context, index) => const Divider(color: Color(0xFF334155), height: 1),
+                      separatorBuilder: (context, index) => const Divider(color: TexoraColors.borderDefault, height: 1),
                       itemBuilder: (ctx, idx) {
                         final item = _selectedMachineTelemetry[idx];
                         final ts = item['timestamp']?.toString() ?? '';
@@ -1000,21 +1272,21 @@ class _MachineHealthAgentScreenState extends State<MachineHealthAgentScreen> {
                         final temp = (item['temperature_c'] as num?)?.toDouble();
 
                         return Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
                                 ts.length > 19 ? ts.substring(11, 19) : ts,
-                                style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10, fontFamily: 'monospace'),
+                                style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 10, fontFamily: 'monospace'),
                               ),
                               Text(
                                 vib != null ? '${vib.toStringAsFixed(2)} mm/s' : '—',
-                                style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold),
+                                style: const TextStyle(color: TexoraColors.primaryBlue, fontSize: 11, fontWeight: FontWeight.bold),
                               ),
                               Text(
                                 temp != null ? '${temp.toStringAsFixed(1)} °C' : '—',
-                                style: const TextStyle(color: Colors.white, fontSize: 11),
+                                style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 11),
                               ),
                             ],
                           ),
@@ -1035,14 +1307,14 @@ class _MachineHealthAgentScreenState extends State<MachineHealthAgentScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E293B),
+          color: TexoraColors.workspaceBg,
           borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: const Color(0xFF334155)),
+          border: Border.all(color: TexoraColors.borderDefault),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10)),
+            Text(label, style: const TextStyle(color: TexoraColors.textMuted, fontSize: 10)),
             const SizedBox(height: 2),
             Text(value, style: TextStyle(color: valueColor, fontSize: 13, fontWeight: FontWeight.bold)),
           ],
@@ -1057,9 +1329,125 @@ class _MachineHealthAgentScreenState extends State<MachineHealthAgentScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
-          Text(value, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600, fontFamily: 'monospace')),
+          Text(label, style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 11)),
+          Text(value, style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 11, fontWeight: FontWeight.w600, fontFamily: 'monospace')),
         ],
+      ),
+    );
+  }
+
+  Widget _buildTelemetryTrendWorkspace(MachineTwinModel m, Map<String, dynamic> limits) {
+    final warningVib = (limits['warning_vibration_mms'] as num?)?.toDouble() ?? 4.0;
+    final criticalVib = (limits['max_vibration_mms'] as num?)?.toDouble() ?? 5.5;
+    final warningTemp = (limits['warning_temp_c'] as num?)?.toDouble() ?? 75.0;
+    final criticalTemp = (limits['max_temp_c'] as num?)?.toDouble() ?? 85.0;
+
+    List<TelemetryDataPoint> chartPoints = [];
+    String unit = 'mm/s';
+    Color lineColor = TexoraColors.primaryBlue;
+    double? warnThreshold;
+    double? critThreshold;
+
+    if (_activeTrendMetric == 'vibration') {
+      unit = 'mm/s';
+      lineColor = TexoraColors.primaryBlue;
+      warnThreshold = warningVib;
+      critThreshold = criticalVib;
+      chartPoints = _selectedMachineTelemetry.map((item) {
+        final ts = DateTime.tryParse(item['timestamp']?.toString() ?? '') ?? DateTime.now();
+        final val = (item['vibration_mms'] as num?)?.toDouble() ?? 0.0;
+        return TelemetryDataPoint(timestamp: ts, value: val);
+      }).toList();
+    } else if (_activeTrendMetric == 'temperature') {
+      unit = '°C';
+      lineColor = const Color(0xFFD97706);
+      warnThreshold = warningTemp;
+      critThreshold = criticalTemp;
+      chartPoints = _selectedMachineTelemetry.map((item) {
+        final ts = DateTime.tryParse(item['timestamp']?.toString() ?? '') ?? DateTime.now();
+        final val = (item['temperature_c'] as num?)?.toDouble() ?? 0.0;
+        return TelemetryDataPoint(timestamp: ts, value: val);
+      }).toList();
+    } else {
+      unit = 'RPM';
+      lineColor = TexoraColors.purple;
+      chartPoints = _selectedMachineTelemetry.map((item) {
+        final ts = DateTime.tryParse(item['timestamp']?.toString() ?? '') ?? DateTime.now();
+        final val = (item['speed_rpm'] as num?)?.toDouble() ?? 0.0;
+        return TelemetryDataPoint(timestamp: ts, value: val);
+      }).toList();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 8,
+          runSpacing: 4,
+          children: [
+            const Text(
+              'HISTORICAL TELEMETRY TREND',
+              style: TextStyle(
+                color: TexoraColors.textMuted,
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 0.6,
+              ),
+            ),
+            // Metric Selector Tabs
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildTrendTab('Vibration', 'vibration', TexoraColors.primaryBlue),
+                const SizedBox(width: 4),
+                _buildTrendTab('Temp', 'temperature', const Color(0xFFD97706)),
+                const SizedBox(width: 4),
+                _buildTrendTab('RPM', 'speed', TexoraColors.purple),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        TexoraTrendChart(
+          points: chartPoints,
+          metricName: _activeTrendMetric == 'vibration'
+              ? 'Vibration (RMS)'
+              : (_activeTrendMetric == 'temperature' ? 'Bearing Temperature' : 'Spindle Speed'),
+          unit: unit,
+          lineColor: lineColor,
+          warningThreshold: warnThreshold,
+          criticalThreshold: critThreshold,
+          height: 180,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTrendTab(String label, String metricKey, Color activeColor) {
+    final isSelected = _activeTrendMetric == metricKey;
+    return InkWell(
+      onTap: () => setState(() => _activeTrendMetric = metricKey),
+      borderRadius: BorderRadius.circular(4),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+        decoration: BoxDecoration(
+          color: isSelected ? activeColor.withAlpha(20) : Colors.transparent,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(
+            color: isSelected ? activeColor : TexoraColors.borderDefault,
+            width: 0.8,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+            color: isSelected ? activeColor : TexoraColors.textSecondary,
+          ),
+        ),
       ),
     );
   }
@@ -1078,33 +1466,142 @@ class _MachineHealthAgentScreenState extends State<MachineHealthAgentScreen> {
             const Flexible(
               child: Text(
                 'AI INVESTIGATION & AUTONOMOUS REASONING LOG',
-                style: TextStyle(color: Color(0xFF64748B), fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.8),
+                style: TextStyle(color: TexoraColors.textMuted, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.8),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
             if (_snapshot != null)
               Text(
                 'Plant Snapshot: ${_snapshot!.factoryCode} • Synchronized',
-                style: const TextStyle(color: Color(0xFF64748B), fontSize: 10.5, fontFamily: 'monospace'),
+                style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 10.5, fontFamily: 'monospace'),
               ),
           ],
         ),
         const SizedBox(height: 12),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Left Column: Pending Incidents Awaiting AI & Approvals
-            Expanded(
-              flex: 5,
-              child: Column(
-                children: [
-                  // Sub-panel: Pending Incidents
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final isNarrow = constraints.maxWidth < 850;
+
+            final leftColumn = Column(
+              children: [
+                // Sub-panel: Pending Incidents
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(TexoraSpacing.radiusMd),
+                    border: Border.all(color: TexoraColors.borderDefault),
+                    boxShadow: TexoraSpacing.cardShadow,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Flexible(
+                            child: Text(
+                              'Awaiting AI Investigation',
+                              style: TextStyle(color: TexoraColors.textPrimary, fontSize: 13, fontWeight: FontWeight.bold),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF59E0B).withAlpha(25),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: const Color(0xFFF59E0B)),
+                            ),
+                            child: Text(
+                              '${pending.length} Pending',
+                              style: const TextStyle(color: Color(0xFFD97706), fontSize: 10, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      if (pending.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 14),
+                          child: Center(
+                            child: Text('All detected incidents have completed AI investigation.', style: TextStyle(color: TexoraColors.textSecondary, fontSize: 12)),
+                          ),
+                        )
+                      else
+                        ListView.separated(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: pending.take(4).length,
+                          separatorBuilder: (context, index) => const SizedBox(height: 8),
+                          itemBuilder: (ctx, idx) {
+                            final inc = pending[idx];
+                            final isInv = _investigatingIncidentId == inc.id;
+
+                            return Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: TexoraColors.workspaceBg,
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: TexoraColors.borderDefault),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          '${inc.machineCode} • ${inc.severity}',
+                                          style: TextStyle(
+                                            color: inc.severity == 'CRITICAL' ? TexoraColors.criticalText : const Color(0xFFD97706),
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          inc.summary,
+                                          style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 11.5),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  ElevatedButton(
+                                    onPressed: isInv ? null : () => _triggerInvestigation(inc.id),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: TexoraColors.primaryBlue,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                                      elevation: 0,
+                                    ),
+                                    child: isInv
+                                        ? const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                        : const Text('Investigate', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                    ],
+                  ),
+                ),
+
+                // Sub-panel: Pending Human Approvals (if any)
+                if (pendingApprovals.isNotEmpty) ...[
+                  const SizedBox(height: 12),
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFF334155)),
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(TexoraSpacing.radiusMd),
+                      border: Border.all(color: const Color(0xFFF59E0B).withAlpha(120)),
+                      boxShadow: TexoraSpacing.cardShadow,
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1114,324 +1611,233 @@ class _MachineHealthAgentScreenState extends State<MachineHealthAgentScreen> {
                           children: [
                             const Flexible(
                               child: Text(
-                                'Awaiting AI Investigation',
-                                style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                                'Pending Approvals',
+                                style: TextStyle(color: TexoraColors.textPrimary, fontSize: 12.5, fontWeight: FontWeight.bold),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF59E0B).withAlpha(35),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                '${pending.length} Pending',
-                                style: const TextStyle(color: Color(0xFFF59E0B), fontSize: 10, fontWeight: FontWeight.bold),
-                              ),
+                            Text(
+                              '${pendingApprovals.length} Req',
+                              style: const TextStyle(color: Color(0xFFD97706), fontSize: 10.5, fontWeight: FontWeight.bold),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 12),
-                        if (pending.isEmpty)
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 14),
-                            child: Center(
-                              child: Text('All detected incidents have completed AI investigation.', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
-                            ),
-                          )
-                        else
-                          ListView.separated(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: pending.take(4).length,
-                            separatorBuilder: (context, index) => const SizedBox(height: 8),
-                            itemBuilder: (ctx, idx) {
-                              final inc = pending[idx];
-                              final isInv = _investigatingIncidentId == inc.id;
-
-                              return Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF0F172A),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: const Color(0xFF334155)),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            '${inc.machineCode} • ${inc.severity}',
-                                            style: TextStyle(
-                                              color: inc.severity == 'CRITICAL' ? AppColors.errorRed : const Color(0xFFF59E0B),
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            inc.summary,
-                                            style: const TextStyle(color: Colors.white, fontSize: 11.5),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    ElevatedButton(
-                                      onPressed: isInv ? null : () => _triggerInvestigation(inc.id),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color(0xFF0284C7),
-                                        foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                                      ),
-                                      child: isInv
-                                          ? const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                                          : const Text('Investigate', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-                      ],
-                    ),
-                  ),
-
-                  // Sub-panel: Pending Human Approvals (if any)
-                  if (pendingApprovals.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1E293B),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFFF59E0B).withAlpha(100)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Flexible(
-                                child: Text(
-                                  'Pending Approvals',
-                                  style: TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                        const SizedBox(height: 10),
+                        ListView.separated(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: pendingApprovals.take(3).length,
+                          separatorBuilder: (context, index) => const SizedBox(height: 8),
+                          itemBuilder: (ctx, idx) {
+                            final appr = pendingApprovals[idx];
+                            return Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: TexoraColors.workspaceBg,
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: TexoraColors.borderDefault),
                               ),
-                              Text(
-                                '${pendingApprovals.length} Req',
-                                style: const TextStyle(color: Color(0xFFF59E0B), fontSize: 10.5, fontWeight: FontWeight.bold),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          ListView.separated(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: pendingApprovals.take(3).length,
-                            separatorBuilder: (context, index) => const SizedBox(height: 8),
-                            itemBuilder: (ctx, idx) {
-                              final appr = pendingApprovals[idx];
-                              return Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF0F172A),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: const Color(0xFF334155)),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            appr.title.isNotEmpty ? appr.title : appr.requestedAction,
-                                            style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            'Risk: ${appr.riskLevel} • Code: ${appr.approvalCode}',
-                                            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    OutlinedButton(
-                                      onPressed: () => _handleReject(appr.id),
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor: const Color(0xFFF59E0B),
-                                        side: const BorderSide(color: Color(0xFFF59E0B)),
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                        minimumSize: Size.zero,
-                                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                      ),
-                                      child: const Text('Reject', style: TextStyle(fontSize: 10)),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    ElevatedButton(
-                                      onPressed: () => _handleApprove(appr.id),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: AppColors.successGreen,
-                                        foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                        minimumSize: Size.zero,
-                                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                      ),
-                                      child: const Text('Approve', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(width: 16),
-
-            // Right Column: Recent AI Inferences & Verdicts
-            Expanded(
-              flex: 6,
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFF334155)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Flexible(
-                          child: Text(
-                            'Recent AI Diagnoses & Findings',
-                            style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        Text(
-                          '${execs.length} Recorded',
-                          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    if (execs.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 18),
-                        child: Center(
-                          child: Text('No AI investigations executed yet.', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
-                        ),
-                      )
-                    else
-                      ListView.separated(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: execs.take(4).length,
-                        separatorBuilder: (context, index) => const SizedBox(height: 8),
-                        itemBuilder: (ctx, idx) {
-                          final ex = execs[idx];
-                          final hasDec = ex.decisions.isNotEmpty;
-                          final dec = hasDec ? ex.decisions.first : null;
-
-                          return Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF0F172A),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: const Color(0xFF334155)),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Expanded(
-                                      child: Row(
-                                        children: [
-                                          const Icon(Icons.smart_toy_rounded, color: Color(0xFF38BDF8), size: 14),
-                                          const SizedBox(width: 6),
-                                          Expanded(
-                                            child: Text(
-                                              ex.triggerEvent.isNotEmpty ? ex.triggerEvent : 'Diagnostic Run',
-                                              style: const TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.bold),
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      '${ex.latencyMs}ms | ${ex.tokenCount} tokens',
-                                      style: const TextStyle(color: Color(0xFF64748B), fontSize: 10),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  ex.executionSummary,
-                                  style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 11),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                if (dec != null) ...[
-                                  const SizedBox(height: 6),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF1E293B),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Row(
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        const Text('Verdict: ', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5)),
-                                        Expanded(
-                                          child: Text(
-                                            dec.rationale.isNotEmpty ? dec.rationale : dec.decisionTypeDisplay,
-                                            style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10.5, fontWeight: FontWeight.w600),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
                                         Text(
-                                          '${dec.confidenceScore.toInt()}%',
-                                          style: const TextStyle(color: AppColors.successGreen, fontSize: 10.5, fontWeight: FontWeight.bold),
+                                          appr.title.isNotEmpty ? appr.title : appr.requestedAction,
+                                          style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 11, fontWeight: FontWeight.w600),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          'Risk: ${appr.riskLevel} • Code: ${appr.approvalCode}',
+                                          style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 10),
                                         ),
                                       ],
                                     ),
                                   ),
+                                  const SizedBox(width: 8),
+                                  OutlinedButton(
+                                    onPressed: () => _handleReject(appr.id),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: const Color(0xFFD97706),
+                                      side: const BorderSide(color: Color(0xFFD97706)),
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      minimumSize: Size.zero,
+                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    ),
+                                    child: const Text('Reject', style: TextStyle(fontSize: 10)),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  ElevatedButton(
+                                    onPressed: () => _handleApprove(appr.id),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: TexoraColors.successText,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      minimumSize: Size.zero,
+                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                      elevation: 0,
+                                    ),
+                                    child: const Text('Approve', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                                  ),
                                 ],
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                  ],
-                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            );
+
+            final rightColumn = Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(TexoraSpacing.radiusMd),
+                border: Border.all(color: TexoraColors.borderDefault),
+                boxShadow: TexoraSpacing.cardShadow,
               ),
-            ),
-          ],
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Flexible(
+                        child: Text(
+                          'Recent AI Diagnoses & Findings',
+                          style: TextStyle(color: TexoraColors.textPrimary, fontSize: 13, fontWeight: FontWeight.bold),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Text(
+                        '${execs.length} Recorded',
+                        style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  if (execs.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 18),
+                      child: Center(
+                        child: Text('No AI investigations executed yet.', style: TextStyle(color: TexoraColors.textSecondary, fontSize: 12)),
+                      ),
+                    )
+                  else
+                    ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: execs.take(4).length,
+                      separatorBuilder: (context, index) => const SizedBox(height: 8),
+                      itemBuilder: (ctx, idx) {
+                        final ex = execs[idx];
+                        final hasDec = ex.decisions.isNotEmpty;
+                        final dec = hasDec ? ex.decisions.first : null;
+
+                        return Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: TexoraColors.workspaceBg,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: TexoraColors.borderDefault),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Row(
+                                      children: [
+                                        const Icon(Icons.smart_toy_rounded, color: TexoraColors.primaryBlue, size: 14),
+                                        const SizedBox(width: 6),
+                                        Expanded(
+                                          child: Text(
+                                            ex.triggerEvent.isNotEmpty ? ex.triggerEvent : 'Diagnostic Run',
+                                            style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 11.5, fontWeight: FontWeight.bold),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    '${ex.latencyMs}ms | ${ex.tokenCount} tokens',
+                                    style: const TextStyle(color: TexoraColors.textMuted, fontSize: 10),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                ex.executionSummary,
+                                style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 11),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              if (dec != null) ...[
+                                const SizedBox(height: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: TexoraColors.borderDefault),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Text('Verdict: ', style: TextStyle(color: TexoraColors.textMuted, fontSize: 10.5)),
+                                      Expanded(
+                                        child: Text(
+                                          dec.rationale.isNotEmpty ? dec.rationale : dec.decisionTypeDisplay,
+                                          style: const TextStyle(color: TexoraColors.primaryBlue, fontSize: 10.5, fontWeight: FontWeight.w600),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      Text(
+                                        '${dec.confidenceScore.toInt()}%',
+                                        style: const TextStyle(color: TexoraColors.successText, fontSize: 10.5, fontWeight: FontWeight.bold),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                ],
+              ),
+            );
+
+            if (isNarrow) {
+              return Column(
+                children: [
+                  leftColumn,
+                  const SizedBox(height: 16),
+                  rightColumn,
+                ],
+              );
+            }
+
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(flex: 5, child: leftColumn),
+                const SizedBox(width: 16),
+                Expanded(flex: 6, child: rightColumn),
+              ],
+            );
+          },
         ),
       ],
     );

@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import '../../core/constants/app_colors.dart';
+import '../../core/theme/texora_design_system.dart';
 import '../../data/models/digital_twin_models.dart';
 import '../../data/services/api_service.dart';
 import '../widgets/metric_card.dart';
@@ -10,10 +10,16 @@ enum DigitalTwinViewMode { flowView, gridView }
 
 class DigitalTwinScreen extends StatefulWidget {
   final Function(String machineCode)? onNavigateToWhatIfWithMachine;
+  final DigitalTwinSnapshotModel? initialSnapshot;
+  final ApiService? apiService;
+  final DigitalTwinViewMode? initialViewMode;
 
   const DigitalTwinScreen({
     super.key,
     this.onNavigateToWhatIfWithMachine,
+    this.initialSnapshot,
+    this.apiService,
+    this.initialViewMode,
   });
 
   @override
@@ -21,13 +27,13 @@ class DigitalTwinScreen extends StatefulWidget {
 }
 
 class _DigitalTwinScreenState extends State<DigitalTwinScreen> {
-  final ApiService _apiService = ApiService();
+  late final ApiService _apiService;
   DigitalTwinSnapshotModel? _snapshot;
   MachineTwinModel? _selectedMachine;
   bool _isLoading = true;
   String? _errorMessage;
   String _selectedDepartmentFilter = 'ALL';
-  DigitalTwinViewMode _viewMode = DigitalTwinViewMode.flowView;
+  late DigitalTwinViewMode _viewMode;
   Timer? _refreshTimer;
 
   final Map<String, String> _departmentNames = {
@@ -42,8 +48,15 @@ class _DigitalTwinScreenState extends State<DigitalTwinScreen> {
   @override
   void initState() {
     super.initState();
-    _loadSnapshot();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 10), (_) => _loadSnapshot(silent: true));
+    _apiService = widget.apiService ?? ApiService();
+    _viewMode = widget.initialViewMode ?? DigitalTwinViewMode.flowView;
+    if (widget.initialSnapshot != null) {
+      _snapshot = widget.initialSnapshot;
+      _isLoading = false;
+    } else {
+      _loadSnapshot();
+      _refreshTimer = Timer.periodic(const Duration(seconds: 10), (_) => _loadSnapshot(silent: true));
+    }
   }
 
   @override
@@ -69,7 +82,6 @@ class _DigitalTwinScreenState extends State<DigitalTwinScreen> {
           if (snap == null) {
             _errorMessage = 'Failed to load factory digital twin snapshot from backend.';
           } else if (_selectedMachine != null) {
-            // Keep selected machine fresh
             _selectedMachine = snap.machineStates.firstWhere(
               (m) => m.code == _selectedMachine!.code,
               orElse: () => _selectedMachine!,
@@ -90,20 +102,20 @@ class _DigitalTwinScreenState extends State<DigitalTwinScreen> {
   Color _getStateColor(String state) {
     switch (state.toUpperCase()) {
       case 'RUNNING':
-        return AppColors.successGreen;
+        return TexoraColors.success;
       case 'WARNING':
-        return AppColors.warningOrange;
+        return TexoraColors.warning;
       case 'CRITICAL':
-        return AppColors.errorRed;
+        return TexoraColors.critical;
       case 'UNDER_MAINTENANCE':
-        return AppColors.primaryBlueLight;
+        return TexoraColors.info;
       case 'IDLE':
-        return const Color(0xFF94A3B8);
+        return TexoraColors.textMuted;
       case 'OFFLINE':
-        return const Color(0xFF64748B);
+        return TexoraColors.textSecondary;
       case 'UNKNOWN':
       default:
-        return const Color(0xFF475569);
+        return TexoraColors.textMuted;
     }
   }
 
@@ -131,7 +143,7 @@ class _DigitalTwinScreenState extends State<DigitalTwinScreen> {
     final stateDistribution = _snapshot?.operationalSummary['state_distribution'] as Map<String, dynamic>? ?? {};
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0F1D), // Dark Navy Command Center Background
+      backgroundColor: TexoraColors.workspaceBg,
       body: Row(
         children: [
           // Main Factory Floor & Department View
@@ -144,7 +156,7 @@ class _DigitalTwinScreenState extends State<DigitalTwinScreen> {
                 _buildMetricCards(stateDistribution),
                 Expanded(
                   child: _isLoading && _snapshot == null
-                      ? const Center(child: CircularProgressIndicator())
+                      ? const Center(child: CircularProgressIndicator(color: TexoraColors.primaryBlue))
                       : _errorMessage != null && _snapshot == null
                           ? _buildErrorView()
                           : _viewMode == DigitalTwinViewMode.flowView
@@ -181,9 +193,9 @@ class _DigitalTwinScreenState extends State<DigitalTwinScreen> {
             Container(
               width: 380,
               decoration: const BoxDecoration(
-                color: Color(0xFF0F172A),
+                color: TexoraColors.cardBg,
                 border: Border(
-                  left: BorderSide(color: Color(0xFF1E293B), width: 1.5),
+                  left: BorderSide(color: TexoraColors.cardBorder, width: 1.5),
                 ),
               ),
               child: _buildMachineDetailPanel(_selectedMachine!),
@@ -195,125 +207,171 @@ class _DigitalTwinScreenState extends State<DigitalTwinScreen> {
 
   Widget _buildHeader() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
       decoration: const BoxDecoration(
-        color: Color(0xFF0F172A),
-        border: Border(bottom: BorderSide(color: Color(0xFF1E293B))),
+        color: TexoraColors.cardBg,
+        border: Border(bottom: BorderSide(color: TexoraColors.cardBorder)),
       ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: AppColors.primaryBlue.withAlpha(38),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppColors.primaryBlueLight.withAlpha(100)),
-            ),
-            child: const Icon(
-              Icons.precision_manufacturing_rounded,
-              color: AppColors.primaryBlueLight,
-              size: 24,
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isNarrow = constraints.maxWidth < 1100;
+          final titleWidget = Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: TexoraColors.primaryBlue.withAlpha(20),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: TexoraColors.primaryBlue.withAlpha(80)),
+                ),
+                child: const Icon(
+                  Icons.precision_manufacturing_rounded,
+                  color: TexoraColors.primaryBlue,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Flexible(
-                      child: Text(
-                        'Factory Digital Twin Command Center',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 19,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: -0.3,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF064E3B),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: const Color(0xFF059669)),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.hub_rounded, color: Color(0xFF34D399), size: 12),
-                          SizedBox(width: 4),
-                          Text(
-                            'SIMULATED FACTORY DIGITAL TWIN',
-                            style: TextStyle(
-                              color: Color(0xFF34D399),
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 0.5,
-                            ),
+                    Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 10,
+                      runSpacing: 4,
+                      children: [
+                        const Text(
+                          'Factory Digital Twin Command Center',
+                          style: TextStyle(
+                            color: TexoraColors.textPrimary,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: -0.3,
                           ),
-                        ],
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: TexoraColors.successBg,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: TexoraColors.successBorder),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.hub_rounded, color: TexoraColors.successText, size: 12),
+                              SizedBox(width: 4),
+                              Text(
+                                'SIMULATED FACTORY DIGITAL TWIN',
+                                style: TextStyle(
+                                  color: TexoraColors.successText,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _snapshot != null
+                          ? '${_snapshot!.factoryCode} — ${_snapshot!.factoryName} • Real-time Topology'
+                          : 'Loading real-time plant telemetry...',
+                      style: const TextStyle(
+                        color: TexoraColors.textSecondary,
+                        fontSize: 11,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  'Live operational topology across 25 textile machines in 5 departments — PSG Coimbatore Expo Platform',
-                  style: TextStyle(color: Colors.white.withAlpha(160), fontSize: 12),
-                ),
-              ],
-            ),
-          ),
-          // View Switcher Buttons
-          Container(
-            padding: const EdgeInsets.all(3),
-            decoration: BoxDecoration(
-              color: const Color(0xFF0A0F1D),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFF1E293B)),
-            ),
+              ),
+            ],
+          );
+
+          final controlsWidget = SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _buildViewToggleButton(
-                  mode: DigitalTwinViewMode.flowView,
-                  icon: Icons.account_tree_rounded,
-                  label: 'Factory Flow View',
+                // View Mode Selector
+                Container(
+                  decoration: BoxDecoration(
+                    color: TexoraColors.inputBg,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: TexoraColors.cardBorder),
+                  ),
+                  padding: const EdgeInsets.all(2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildViewModeButton(
+                        mode: DigitalTwinViewMode.flowView,
+                        label: 'Process Flow',
+                        icon: Icons.account_tree_rounded,
+                      ),
+                      _buildViewModeButton(
+                        mode: DigitalTwinViewMode.gridView,
+                        label: 'Shop Floor Grid',
+                        icon: Icons.grid_view_rounded,
+                      ),
+                    ],
+                  ),
                 ),
-                _buildViewToggleButton(
-                  mode: DigitalTwinViewMode.gridView,
-                  icon: Icons.grid_view_rounded,
-                  label: 'Machine Grid View',
+                const SizedBox(width: 12),
+                // Refresh Button
+                OutlinedButton.icon(
+                  onPressed: _isLoading ? null : () => _loadSnapshot(refresh: true),
+                  icon: const Icon(Icons.refresh_rounded, size: 16),
+                  label: const Text('Refresh Snapshot'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: TexoraColors.textPrimary,
+                    backgroundColor: TexoraColors.cardBg,
+                    side: const BorderSide(color: TexoraColors.cardBorder),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
                 ),
               ],
             ),
-          ),
-          const SizedBox(width: 12),
-          ElevatedButton.icon(
-            onPressed: () => _loadSnapshot(refresh: true),
-            icon: const Icon(Icons.sync_rounded, size: 16),
-            label: const Text('Refresh Snapshot'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1E293B),
-              foregroundColor: Colors.white,
-              elevation: 0,
-              side: const BorderSide(color: Color(0xFF334155)),
-            ),
-          ),
-        ],
+          );
+
+          if (isNarrow) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                titleWidget,
+                const SizedBox(height: 12),
+                controlsWidget,
+              ],
+            );
+          }
+
+          return Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(child: titleWidget),
+              const SizedBox(width: 16),
+              controlsWidget,
+            ],
+          );
+        },
       ),
     );
   }
 
-  Widget _buildViewToggleButton({
+  Widget _buildViewModeButton({
     required DigitalTwinViewMode mode,
-    required IconData icon,
     required String label,
+    required IconData icon,
   }) {
     final isSelected = _viewMode == mode;
     return InkWell(
@@ -327,23 +385,27 @@ class _DigitalTwinScreenState extends State<DigitalTwinScreen> {
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.primaryBlue : Colors.transparent,
+          color: isSelected ? TexoraColors.cardBg : Colors.transparent,
           borderRadius: BorderRadius.circular(6),
+          boxShadow: isSelected
+              ? const [BoxShadow(color: Color(0x0A000000), blurRadius: 4, offset: Offset(0, 1))]
+              : null,
         ),
         child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               icon,
               size: 14,
-              color: isSelected ? Colors.white : const Color(0xFF94A3B8),
+              color: isSelected ? TexoraColors.primaryBlue : TexoraColors.textMuted,
             ),
             const SizedBox(width: 6),
             Text(
               label,
               style: TextStyle(
-                color: isSelected ? Colors.white : const Color(0xFF94A3B8),
+                color: isSelected ? TexoraColors.textPrimary : TexoraColors.textSecondary,
                 fontSize: 12,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
               ),
             ),
           ],
@@ -352,93 +414,84 @@ class _DigitalTwinScreenState extends State<DigitalTwinScreen> {
     );
   }
 
-  Widget _buildMetricCards(Map<String, dynamic> stateDistribution) {
-    int running = stateDistribution['RUNNING'] ?? 0;
-    int warning = stateDistribution['WARNING'] ?? 0;
-    int critical = stateDistribution['CRITICAL'] ?? 0;
-    int maintenance = stateDistribution['UNDER_MAINTENANCE'] ?? 0;
-    int unknown = stateDistribution['UNKNOWN'] ?? 0;
-    int total = _snapshot?.totalMachines ?? 25;
+  Widget _buildMetricCards(Map<String, dynamic> stateDist) {
+    final running = stateDist['RUNNING'] ?? 0;
+    final warning = stateDist['WARNING'] ?? 0;
+    final critical = stateDist['CRITICAL'] ?? 0;
+    final maintenance = stateDist['UNDER_MAINTENANCE'] ?? 0;
+    final unknown = stateDist['UNKNOWN'] ?? 0;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-      child: Row(
-        children: [
-          Expanded(
-            child: MetricCard(
-              title: 'Total Active Machines',
-              value: '$total Assets',
-              icon: Icons.factory_rounded,
-              accentColor: AppColors.primaryBlueLight,
-              backgroundColor: const Color(0xFF0F172A),
-              borderColor: const Color(0xFF1E293B),
-              titleColor: const Color(0xFF94A3B8),
-              valueColor: Colors.white,
-              subtitleColor: const Color(0xFF64748B),
-              subtitle: '5 Departments Monitored',
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: MetricCard(
-              title: 'Nominal Running',
-              value: '$running',
-              icon: Icons.check_circle_rounded,
-              accentColor: AppColors.successGreen,
-              backgroundColor: const Color(0xFF0F172A),
-              borderColor: const Color(0xFF1E293B),
-              titleColor: const Color(0xFF94A3B8),
-              valueColor: Colors.white,
-              subtitleColor: const Color(0xFF64748B),
-              subtitle: 'Within Operating Envelopes',
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: MetricCard(
-              title: 'Warning Excursions',
-              value: '$warning',
-              icon: Icons.warning_rounded,
-              accentColor: AppColors.warningOrange,
-              backgroundColor: const Color(0xFF0F172A),
-              borderColor: const Color(0xFF1E293B),
-              titleColor: const Color(0xFF94A3B8),
-              valueColor: Colors.white,
-              subtitleColor: const Color(0xFF64748B),
-              subtitle: 'Minor Telemetry Deviation',
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: MetricCard(
-              title: 'Critical & Maintenance',
-              value: '${critical + maintenance}',
-              icon: Icons.build_circle_rounded,
-              accentColor: (critical + maintenance) > 0 ? AppColors.errorRed : AppColors.successGreen,
-              backgroundColor: const Color(0xFF0F172A),
-              borderColor: const Color(0xFF1E293B),
-              titleColor: const Color(0xFF94A3B8),
-              valueColor: Colors.white,
-              subtitleColor: const Color(0xFF64748B),
-              subtitle: '$critical Critical / $maintenance Work Orders',
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: MetricCard(
-              title: 'Missing / Stale Readings',
-              value: '$unknown',
-              icon: Icons.sensors_off_rounded,
-              accentColor: unknown > 0 ? const Color(0xFF94A3B8) : AppColors.successGreen,
-              backgroundColor: const Color(0xFF0F172A),
-              borderColor: const Color(0xFF1E293B),
-              titleColor: const Color(0xFF94A3B8),
-              valueColor: Colors.white,
-              subtitleColor: const Color(0xFF64748B),
-              subtitle: unknown > 0 ? 'Telemetry Stale (>180s - Simulator Paused)' : 'All Telemetry Fresh',
-            ),
-          ),
-        ],
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          int count = constraints.maxWidth < 650 ? 2 : (constraints.maxWidth < 1100 ? 3 : 5);
+          return GridView.count(
+            crossAxisCount: count,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            childAspectRatio: count == 2 ? 1.7 : (count == 3 ? 1.55 : 1.45),
+            children: [
+              MetricCard(
+                title: 'OPERATIONAL',
+                value: '$running',
+                subtitle: 'Active Production',
+                icon: Icons.check_circle_outline_rounded,
+                accentColor: TexoraColors.success,
+                backgroundColor: TexoraColors.cardBg,
+                borderColor: TexoraColors.cardBorder,
+                titleColor: TexoraColors.textMuted,
+                subtitleColor: TexoraColors.textSecondary,
+              ),
+              MetricCard(
+                title: 'WARNING',
+                value: '$warning',
+                subtitle: 'Potential Risk',
+                icon: Icons.warning_amber_rounded,
+                accentColor: TexoraColors.warning,
+                backgroundColor: TexoraColors.cardBg,
+                borderColor: TexoraColors.cardBorder,
+                titleColor: TexoraColors.textMuted,
+                subtitleColor: TexoraColors.textSecondary,
+              ),
+              MetricCard(
+                title: 'CRITICAL ALERTS',
+                value: '$critical',
+                subtitle: 'Action Required',
+                icon: Icons.error_outline_rounded,
+                accentColor: TexoraColors.critical,
+                backgroundColor: TexoraColors.cardBg,
+                borderColor: TexoraColors.cardBorder,
+                titleColor: TexoraColors.textMuted,
+                subtitleColor: TexoraColors.textSecondary,
+              ),
+              MetricCard(
+                title: 'MAINTENANCE',
+                value: '$maintenance',
+                subtitle: 'Under Service',
+                icon: Icons.build_circle_outlined,
+                accentColor: TexoraColors.info,
+                backgroundColor: TexoraColors.cardBg,
+                borderColor: TexoraColors.cardBorder,
+                titleColor: TexoraColors.textMuted,
+                subtitleColor: TexoraColors.textSecondary,
+              ),
+              MetricCard(
+                title: 'STANDBY / IDLE',
+                value: '$unknown',
+                subtitle: 'Headroom Reserve',
+                icon: Icons.pause_circle_outline_rounded,
+                accentColor: TexoraColors.textMuted,
+                backgroundColor: TexoraColors.cardBg,
+                borderColor: TexoraColors.cardBorder,
+                titleColor: TexoraColors.textMuted,
+                subtitleColor: TexoraColors.textSecondary,
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -446,6 +499,10 @@ class _DigitalTwinScreenState extends State<DigitalTwinScreen> {
   Widget _buildDepartmentFilterBar() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+      decoration: const BoxDecoration(
+        color: TexoraColors.cardBg,
+        border: Border(bottom: BorderSide(color: TexoraColors.cardBorder)),
+      ),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
@@ -457,19 +514,16 @@ class _DigitalTwinScreenState extends State<DigitalTwinScreen> {
                 selected: isSelected,
                 label: Text(entry.value),
                 labelStyle: TextStyle(
-                  color: isSelected ? Colors.white : const Color(0xFF94A3B8),
+                  color: isSelected ? TexoraColors.primaryBlue : TexoraColors.textSecondary,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                   fontSize: 12,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                 ),
-                backgroundColor: const Color(0xFF0F172A),
-                selectedColor: AppColors.primaryBlue,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  side: BorderSide(
-                    color: isSelected ? AppColors.primaryBlueLight : const Color(0xFF1E293B),
-                  ),
+                backgroundColor: TexoraColors.workspaceBg,
+                selectedColor: TexoraColors.sidebarActivePill,
+                side: BorderSide(
+                  color: isSelected ? TexoraColors.primaryBlue : TexoraColors.cardBorder,
                 ),
-                onSelected: (_) {
+                onSelected: (selected) {
                   setState(() {
                     _selectedDepartmentFilter = entry.key;
                   });
@@ -484,99 +538,49 @@ class _DigitalTwinScreenState extends State<DigitalTwinScreen> {
 
   Widget _buildFactoryFloorLayout() {
     final machines = _snapshot?.machineStates ?? [];
-    final filteredMachines = _selectedDepartmentFilter == 'ALL'
+    final filtered = _selectedDepartmentFilter == 'ALL'
         ? machines
         : machines.where((m) => m.departmentCode == _selectedDepartmentFilter).toList();
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: const Color(0xFF0F172A),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFF1E293B)),
-        ),
+    if (filtered.isEmpty) {
+      return Center(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.grid_view_rounded, color: AppColors.primaryBlueLight, size: 18),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Interactive Factory Floor Layout (${filteredMachines.length} Machines)',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-                Row(
-                  children: [
-                    _buildLegendItem('Running', AppColors.successGreen),
-                    const SizedBox(width: 12),
-                    _buildLegendItem('Warning', AppColors.warningOrange),
-                    const SizedBox(width: 12),
-                    _buildLegendItem('Critical', AppColors.errorRed),
-                    const SizedBox(width: 12),
-                    _buildLegendItem('Maintenance', AppColors.primaryBlueLight),
-                    const SizedBox(width: 12),
-                    _buildLegendItem('Stale/Unknown', const Color(0xFF475569)),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: GridView.builder(
-                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                  maxCrossAxisExtent: 260,
-                  mainAxisExtent: 180,
-                  crossAxisSpacing: 14,
-                  mainAxisSpacing: 14,
-                ),
-                itemCount: filteredMachines.length,
-                itemBuilder: (context, index) {
-                  final machine = filteredMachines[index];
-                  final isSelected = _selectedMachine?.code == machine.code;
-                  return _buildMachineTile(machine, isSelected);
-                },
-              ),
+            const Icon(Icons.inbox_rounded, color: TexoraColors.textMuted, size: 48),
+            const SizedBox(height: 12),
+            Text(
+              'No machines found in ${_departmentNames[_selectedDepartmentFilter] ?? _selectedDepartmentFilter}',
+              style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 14),
             ),
           ],
         ),
-      ),
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        int columns = constraints.maxWidth < 600 ? 1 : (constraints.maxWidth < 1000 ? 2 : 3);
+        return GridView.builder(
+          padding: const EdgeInsets.all(24),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: columns,
+            crossAxisSpacing: 14,
+            mainAxisSpacing: 14,
+            childAspectRatio: 1.45,
+          ),
+          itemCount: filtered.length,
+          itemBuilder: (context, index) {
+            return _buildMachineGridCard(filtered[index]);
+          },
+        );
+      },
     );
   }
 
-  Widget _buildLegendItem(String label, Color color) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 4),
-        Text(
-          label,
-          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMachineTile(MachineTwinModel machine, bool isSelected) {
+  Widget _buildMachineGridCard(MachineTwinModel machine) {
+    final isSelected = _selectedMachine?.code == machine.code;
     final stateColor = _getStateColor(machine.twinPresentationState);
-    final stateIcon = _getStateIcon(machine.twinPresentationState);
-    final tel = machine.latestTelemetry;
 
     return InkWell(
       onTap: () {
@@ -585,62 +589,78 @@ class _DigitalTwinScreenState extends State<DigitalTwinScreen> {
         });
       },
       borderRadius: BorderRadius.circular(10),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.all(12),
+      child: Container(
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF1E293B) : const Color(0xFF0B132B),
+          color: TexoraColors.cardBg,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: isSelected
-                ? AppColors.primaryBlueLight
-                : stateColor.withAlpha(machine.twinPresentationState == 'RUNNING' ? 50 : 180),
-            width: isSelected ? 2 : 1,
+            color: isSelected ? TexoraColors.primaryBlue : TexoraColors.cardBorder,
+            width: isSelected ? 2.0 : 1.0,
           ),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: AppColors.primaryBlue.withAlpha(40),
-                    blurRadius: 10,
-                    spreadRadius: 2,
-                  )
-                ]
-              : null,
+          boxShadow: [
+            BoxShadow(
+              color: isSelected ? TexoraColors.primaryBlue.withAlpha(25) : const Color(0x05000000),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            // Top Row: Code + Status Badge
+            // Top Row
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Icon(stateIcon, color: stateColor, size: 16),
-                    const SizedBox(width: 6),
-                    Text(
-                      machine.code,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
+                Expanded(
+                  flex: 3,
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: stateColor.withAlpha(20),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Icon(_getStateIcon(machine.twinPresentationState), color: stateColor, size: 16),
                       ),
-                    ),
-                  ],
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: stateColor.withAlpha(30),
-                    borderRadius: BorderRadius.circular(4),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          machine.code,
+                          style: const TextStyle(
+                            color: TexoraColors.textPrimary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
                   ),
-                  child: Text(
-                    machine.twinPresentationState,
-                    style: TextStyle(
-                      color: stateColor,
-                      fontSize: 9,
-                      fontWeight: FontWeight.bold,
+                ),
+                const SizedBox(width: 6),
+                Flexible(
+                  flex: 2,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                    decoration: BoxDecoration(
+                      color: stateColor.withAlpha(20),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: stateColor.withAlpha(80)),
+                    ),
+                    child: Text(
+                      machine.twinPresentationState,
+                      style: TextStyle(
+                        color: stateColor,
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ),
@@ -653,62 +673,24 @@ class _DigitalTwinScreenState extends State<DigitalTwinScreen> {
               children: [
                 Text(
                   machine.name,
-                  style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 11),
+                  style: const TextStyle(
+                    color: TexoraColors.textPrimary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text(
-                  '${machine.departmentName} (${machine.floorLocation})',
-                  style: const TextStyle(color: Color(0xFF64748B), fontSize: 10),
+                  machine.departmentName,
+                  style: const TextStyle(color: TexoraColors.textMuted, fontSize: 10.5),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
 
-            // Telemetry Chips
-            if (tel != null)
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0F172A),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _buildMicroGauge(
-                      'RPM',
-                      '${(tel['speed_rpm'] ?? machine.ratedSpeedRpm).toInt()}',
-                      const Color(0xFF38BDF8),
-                    ),
-                    _buildMicroGauge(
-                      'TEMP',
-                      '${(tel['temperature_c'] ?? 0.0).toStringAsFixed(1)}°C',
-                      (tel['temperature_c'] ?? 0.0) > 75.0 ? AppColors.errorRed : const Color(0xFF10B981),
-                    ),
-                    _buildMicroGauge(
-                      'VIB',
-                      '${(tel['vibration_mms'] ?? 0.0).toStringAsFixed(1)}',
-                      (tel['vibration_mms'] ?? 0.0) > 4.0 ? AppColors.warningOrange : const Color(0xFF10B981),
-                    ),
-                  ],
-                ),
-              )
-            else
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B).withAlpha(100),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: const Center(
-                  child: Text(
-                    'No Telemetry Readings',
-                    style: TextStyle(color: Color(0xFF64748B), fontSize: 10),
-                  ),
-                ),
-              ),
-
-            // Health Bar
+            // Health Progress
             Row(
               children: [
                 Expanded(
@@ -716,37 +698,26 @@ class _DigitalTwinScreenState extends State<DigitalTwinScreen> {
                     borderRadius: BorderRadius.circular(4),
                     child: LinearProgressIndicator(
                       value: (machine.healthScore / 100.0).clamp(0.0, 1.0),
-                      backgroundColor: const Color(0xFF1E293B),
+                      backgroundColor: TexoraColors.inputBg,
                       valueColor: AlwaysStoppedAnimation<Color>(
                         machine.healthScore > 80
-                            ? AppColors.successGreen
-                            : machine.healthScore > 50
-                                ? AppColors.warningOrange
-                                : AppColors.errorRed,
+                            ? TexoraColors.success
+                            : (machine.healthScore > 50 ? TexoraColors.warning : TexoraColors.critical),
                       ),
                       minHeight: 4,
                     ),
                   ),
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: 8),
                 Text(
                   '${machine.healthScore.toInt()}%',
-                  style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10, fontWeight: FontWeight.bold),
+                  style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 11, fontWeight: FontWeight.bold),
                 ),
               ],
             ),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildMicroGauge(String label, String value, Color color) {
-    return Column(
-      children: [
-        Text(label, style: const TextStyle(color: Color(0xFF64748B), fontSize: 8, fontWeight: FontWeight.w600)),
-        Text(value, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
-      ],
     );
   }
 
@@ -762,45 +733,54 @@ class _DigitalTwinScreenState extends State<DigitalTwinScreen> {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: const BoxDecoration(
-            color: Color(0xFF1E293B),
-            border: Border(bottom: BorderSide(color: Color(0xFF334155))),
+            color: TexoraColors.cardBg,
+            border: Border(bottom: BorderSide(color: TexoraColors.cardBorder)),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: stateColor.withAlpha(30),
-                      borderRadius: BorderRadius.circular(8),
+              Expanded(
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: stateColor.withAlpha(20),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(_getStateIcon(machine.twinPresentationState), color: stateColor, size: 20),
                     ),
-                    child: Icon(_getStateIcon(machine.twinPresentationState), color: stateColor, size: 20),
-                  ),
-                  const SizedBox(width: 10),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        machine.code,
-                        style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            machine.code,
+                            style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            machine.name,
+                            style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 11),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                       ),
-                      Text(
-                        machine.name,
-                        style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
-                      ),
-                    ],
-                  ),
-                ],
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               IconButton(
                 onPressed: () {
                   setState(() {
                     _selectedMachine = null;
                   });
                 },
-                icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8)),
+                icon: const Icon(Icons.close_rounded, color: TexoraColors.textMuted),
                 tooltip: 'Close Inspector',
               ),
             ],
@@ -816,7 +796,7 @@ class _DigitalTwinScreenState extends State<DigitalTwinScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: stateColor.withAlpha(20),
+                  color: stateColor.withAlpha(15),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: stateColor.withAlpha(80)),
                 ),
@@ -827,16 +807,20 @@ class _DigitalTwinScreenState extends State<DigitalTwinScreen> {
                       children: [
                         Icon(Icons.info_outline_rounded, color: stateColor, size: 14),
                         const SizedBox(width: 6),
-                        Text(
-                          'TWIN PRESENTATION STATE: ${machine.twinPresentationState}',
-                          style: TextStyle(color: stateColor, fontSize: 11, fontWeight: FontWeight.bold),
+                        Expanded(
+                          child: Text(
+                            'TWIN PRESENTATION STATE: ${machine.twinPresentationState}',
+                            style: TextStyle(color: stateColor, fontSize: 11, fontWeight: FontWeight.bold),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 4),
                     Text(
                       machine.stateReason,
-                      style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 11),
+                      style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 11),
                     ),
                   ],
                 ),
@@ -855,7 +839,7 @@ class _DigitalTwinScreenState extends State<DigitalTwinScreen> {
               ] else
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 8),
-                  child: Text('No telemetry available for this machine.', style: TextStyle(color: Color(0xFF64748B), fontSize: 12)),
+                  child: Text('No telemetry available for this machine.', style: TextStyle(color: TexoraColors.textMuted, fontSize: 12)),
                 ),
               const SizedBox(height: 16),
 
@@ -880,7 +864,7 @@ class _DigitalTwinScreenState extends State<DigitalTwinScreen> {
               ] else
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 8),
-                  child: Text('No active production order attached.', style: TextStyle(color: Color(0xFF64748B), fontSize: 12)),
+                  child: Text('No active production order attached.', style: TextStyle(color: TexoraColors.textMuted, fontSize: 12)),
                 ),
               const SizedBox(height: 16),
 
@@ -894,40 +878,19 @@ class _DigitalTwinScreenState extends State<DigitalTwinScreen> {
                     return Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF1E293B),
+                        color: TexoraColors.sidebarActivePill,
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: const Color(0xFF334155)),
+                        border: Border.all(color: TexoraColors.cardBorder),
                       ),
                       child: Text(
                         alt,
-                        style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold),
+                        style: const TextStyle(color: TexoraColors.primaryBlue, fontSize: 11, fontWeight: FontWeight.bold),
                       ),
                     );
                   }).toList(),
                 )
               else
-                const Text('No compatible alternate machines in tier.', style: TextStyle(color: Color(0xFF64748B), fontSize: 11)),
-              const SizedBox(height: 24),
-
-              // What-If Quick Action Button
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    if (widget.onNavigateToWhatIfWithMachine != null) {
-                      widget.onNavigateToWhatIfWithMachine!(machine.code);
-                    }
-                  },
-                  icon: const Icon(Icons.science_rounded, size: 18),
-                  label: Text('Simulate What-If Outage on ${machine.code}'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primaryBlue,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                ),
-              ),
+                const Text('No compatible alternate machines in tier.', style: TextStyle(color: TexoraColors.textMuted, fontSize: 11)),
             ],
           ),
         ),
@@ -940,15 +903,19 @@ class _DigitalTwinScreenState extends State<DigitalTwinScreen> {
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         children: [
-          Icon(icon, color: const Color(0xFF64748B), size: 14),
+          Icon(icon, color: TexoraColors.textMuted, size: 14),
           const SizedBox(width: 6),
-          Text(
-            title,
-            style: const TextStyle(
-              color: Color(0xFF94A3B8),
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.8,
+          Expanded(
+            child: Text(
+              title,
+              style: const TextStyle(
+                color: TexoraColors.textMuted,
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 0.8,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
@@ -962,17 +929,27 @@ class _DigitalTwinScreenState extends State<DigitalTwinScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            children: [
-              Icon(icon, color: const Color(0xFF475569), size: 14),
-              const SizedBox(width: 6),
-              Text(label, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
-            ],
+          Expanded(
+            child: Row(
+              children: [
+                Icon(icon, color: TexoraColors.textMuted, size: 14),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 11),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
           ),
+          const SizedBox(width: 8),
           Flexible(
             child: Text(
               value,
-              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+              style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 11, fontWeight: FontWeight.w600),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -986,15 +963,16 @@ class _DigitalTwinScreenState extends State<DigitalTwinScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.error_outline_rounded, color: AppColors.errorRed, size: 48),
+          const Icon(Icons.error_outline_rounded, color: TexoraColors.critical, size: 48),
           const SizedBox(height: 12),
           Text(
             _errorMessage ?? 'Unknown error occurred',
-            style: const TextStyle(color: Colors.white, fontSize: 14),
+            style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 14),
           ),
           const SizedBox(height: 16),
           ElevatedButton(
             onPressed: () => _loadSnapshot(refresh: true),
+            style: ElevatedButton.styleFrom(backgroundColor: TexoraColors.primaryBlue),
             child: const Text('Retry Connection'),
           ),
         ],

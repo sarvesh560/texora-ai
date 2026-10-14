@@ -7,7 +7,7 @@ from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from apps.machines.models import Machine, MachineTelemetry, MachineOperatingLimits, MachineStatus
-from apps.maintenance.models import MaintenanceTicket, TicketStatus, VerificationStatus
+from apps.maintenance.models import MaintenanceTicket, TicketStatus, VerificationStatus, WorkOrderTransition
 from apps.incidents.models import FactoryIncident, IncidentStatus
 from apps.audit_logs.models import AuditLog
 
@@ -209,11 +209,22 @@ class RecoveryVerificationService:
                 },
             }
             if ticket:
+                old_status = ticket.status
                 ticket.verification_status = VerificationStatus.FAILED
                 ticket.verification_summary = summary
                 ticket.verification_data = report
                 ticket.status = TicketStatus.VERIFICATION_FAILED
                 ticket.save(update_fields=["verification_status", "verification_summary", "verification_data", "status"])
+                if old_status != TicketStatus.VERIFICATION_FAILED:
+                    WorkOrderTransition.objects.create(
+                        ticket=ticket,
+                        actor="Recovery Verification Engine",
+                        actor_role="Automated Diagnostic System",
+                        previous_state=old_status,
+                        new_state=TicketStatus.VERIFICATION_FAILED,
+                        incident_reference=ticket.incident_reference,
+                        reason=summary,
+                    )
             return report
 
         # Passed all telemetry checks!
@@ -258,12 +269,23 @@ class RecoveryVerificationService:
         }
 
         if ticket:
+            old_status = ticket.status
             ticket.verification_status = outcome
             ticket.verification_summary = summary
             ticket.verification_data = report
             if outcome == VerificationStatus.VERIFIED and ticket.status != TicketStatus.CLOSED:
                 ticket.status = TicketStatus.VERIFIED
             ticket.save(update_fields=["verification_status", "verification_summary", "verification_data", "status"])
+            if outcome == VerificationStatus.VERIFIED and old_status != TicketStatus.VERIFIED and old_status != TicketStatus.CLOSED:
+                WorkOrderTransition.objects.create(
+                    ticket=ticket,
+                    actor="Recovery Verification Engine",
+                    actor_role="Automated Diagnostic System",
+                    previous_state=old_status,
+                    new_state=TicketStatus.VERIFIED,
+                    incident_reference=ticket.incident_reference,
+                    reason=summary,
+                )
 
         return report
 
@@ -379,6 +401,38 @@ class RecoveryVerificationService:
             },
             description=f"Incident {incident.incident_code} closed by {closed_by} with complete verification evidence.",
         )
+
+        # Synchronize linked RecoveryCase and AutonomousWorkflowRun
+        try:
+            from apps.ai_agents.models import (
+                RecoveryCase,
+                RecoveryCaseStatus,
+                AutonomousWorkflowRun,
+                AutonomousWorkflowStage,
+            )
+            recovery_cases = RecoveryCase.objects.filter(incident=incident)
+            for rc in recovery_cases:
+                if rc.status != RecoveryCaseStatus.RECOVERED:
+                    rc.status = RecoveryCaseStatus.RECOVERED
+                    rc.autonomous_stage = AutonomousWorkflowStage.VERIFIED_RECOVERED
+                    rc.recovered_at = timezone.now()
+                    rc.save(update_fields=["status", "autonomous_stage", "recovered_at"])
+
+            runs = AutonomousWorkflowRun.objects.filter(incident=incident)
+            for run in runs:
+                if run.current_stage != AutonomousWorkflowStage.VERIFIED_RECOVERED:
+                    run.current_stage = AutonomousWorkflowStage.VERIFIED_RECOVERED
+                    run.status = "COMPLETED"
+                    stage_history = run.stage_history or []
+                    stage_history.append({
+                        "stage": AutonomousWorkflowStage.VERIFIED_RECOVERED,
+                        "timestamp": timezone.now().isoformat(),
+                        "detail": f"Incident {incident.incident_code} closed with verified recovery evidence by {closed_by}.",
+                    })
+                    run.stage_history = stage_history
+                    run.save(update_fields=["current_stage", "status", "stage_history"])
+        except Exception as sync_err:
+            logger.warning("Could not sync recovery cases/runs on incident closure: %s", sync_err)
 
         return incident
 

@@ -39,7 +39,7 @@ class MetricCard extends StatelessWidget {
     final effectiveSub = subtitleColor ?? AppColors.textMuted;
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: effectiveBg,
         borderRadius: BorderRadius.circular(10),
@@ -60,17 +60,17 @@ class MetricCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Container(
-                padding: const EdgeInsets.all(6),
+                padding: const EdgeInsets.all(5),
                 decoration: BoxDecoration(
                   color: effectiveAccent.withAlpha(25),
                   borderRadius: BorderRadius.circular(6),
                 ),
-                child: Icon(icon, color: effectiveAccent, size: 18),
+                child: Icon(icon, color: effectiveAccent, size: 16),
               ),
               ?trailing,
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Text(
             title,
             style: TextStyle(
@@ -78,6 +78,8 @@ class MetricCard extends StatelessWidget {
               fontSize: 12,
               fontWeight: FontWeight.w600,
             ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 4),
           Text(
@@ -88,6 +90,7 @@ class MetricCard extends StatelessWidget {
               fontWeight: FontWeight.w700,
               letterSpacing: -0.5,
             ),
+            maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
           if (subtitle != null) ...[
@@ -98,6 +101,8 @@ class MetricCard extends StatelessWidget {
                 color: effectiveSub,
                 fontSize: 12,
               ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ],

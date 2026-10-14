@@ -3,6 +3,7 @@ from decimal import Decimal
 from datetime import timedelta
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
+from rest_framework.test import APIClient
 
 from apps.factories.models import Factory, Department, DepartmentType
 from apps.machines.models import Machine, MachineType, MachineOperatingLimits, MachineTelemetry, MachineStatus
@@ -364,3 +365,153 @@ class TestCompleteSimulatedTechnicianWorkflow:
         assert ticket.status == TicketStatus.VERIFICATION_FAILED
         assert result["evaluation_report"]["is_healthy"] is False
         assert result["evaluation_report"]["outcome"] == VerificationStatus.FAILED
+
+
+@pytest.mark.django_db
+class TestStateAwareTransitionsAndRegression:
+    """
+    Regression test suite for tickets in AWAITING_VERIFICATION and invalid state transitions:
+    - Simulating repair on a ticket already in AWAITING_VERIFICATION does not error or repeat repair.
+    - Prevents duplicate spare-part deductions and duplicate repair-completion records.
+    - API endpoints enforce state-aware validation and return clear error messages.
+    - Repeated simulation calls (e.g. rapid double clicks) are idempotent and safe.
+    """
+
+    def test_simulation_on_ticket_already_awaiting_verification_healthy(self, phase12_setup):
+        ticket = phase12_setup["ticket"]
+        spare_part = phase12_setup["spare_part"]
+
+        # First run: advances CREATED -> ... -> AWAITING_VERIFICATION
+        res1 = MaintenanceSimulationService.execute_demo_technician_flow(ticket, mode="HEALTHY")
+        ticket.refresh_from_db()
+        assert ticket.status in [TicketStatus.AWAITING_VERIFICATION, TicketStatus.VERIFIED]
+
+        initial_parts_count = len(ticket.parts_replaced)
+        spare_part.refresh_from_db()
+        stock_after_first_run = spare_part.current_stock
+        transitions_count_first_run = ticket.transitions.count()
+
+        # Ensure ticket is specifically in AWAITING_VERIFICATION
+        ticket.status = TicketStatus.AWAITING_VERIFICATION
+        ticket.save(update_fields=["status"])
+
+        # Second run (repeated click or simulating on ticket already awaiting verification):
+        res2 = MaintenanceSimulationService.execute_demo_technician_flow(ticket, mode="HEALTHY")
+        ticket.refresh_from_db()
+
+        # Must remain in AWAITING_VERIFICATION without invalid transition errors
+        assert ticket.status == TicketStatus.AWAITING_VERIFICATION
+        assert res2["evaluation_report"]["is_healthy"] is True
+        assert res2["evaluation_report"]["outcome"] == VerificationStatus.AWAITING_AUTHORIZED_SIGNOFF
+
+        # Verify NO duplicate spare-part deductions occurred
+        spare_part.refresh_from_db()
+        assert spare_part.current_stock == stock_after_first_run
+        assert len(ticket.parts_replaced) == initial_parts_count
+
+        # Verify NO duplicate REPAIR_COMPLETED transitions were recorded
+        repair_completed_transitions = ticket.transitions.filter(new_state=TicketStatus.REPAIR_COMPLETED)
+        assert repair_completed_transitions.count() == 1
+
+    def test_simulation_on_ticket_already_awaiting_verification_faulty(self, phase12_setup):
+        ticket = phase12_setup["ticket"]
+        spare_part = phase12_setup["spare_part"]
+
+        # Put ticket into AWAITING_VERIFICATION
+        ticket.status = TicketStatus.AWAITING_VERIFICATION
+        ticket.repair_completed_at = timezone.now()
+        ticket.parts_replaced = [{"item_code": spare_part.item_code, "quantity": 1.0, "deducted": True}]
+        ticket.save()
+
+        initial_stock = spare_part.current_stock
+
+        # Simulate Faulty telemetry on AWAITING_VERIFICATION ticket
+        res = MaintenanceSimulationService.execute_demo_technician_flow(ticket, mode="FAULTY")
+        ticket.refresh_from_db()
+
+        # Permitted transition from AWAITING_VERIFICATION to VERIFICATION_FAILED
+        assert ticket.status == TicketStatus.VERIFICATION_FAILED
+        assert ticket.verification_status == VerificationStatus.FAILED
+        assert res["evaluation_report"]["is_healthy"] is False
+        assert res["evaluation_report"]["max_vibration"] > 4.0
+
+        # Stock must not have changed
+        spare_part.refresh_from_db()
+        assert spare_part.current_stock == initial_stock
+
+        # Now re-simulate Healthy from VERIFICATION_FAILED (corrective repair cycle)
+        res_healthy = MaintenanceSimulationService.execute_demo_technician_flow(ticket, mode="HEALTHY")
+        ticket.refresh_from_db()
+        assert ticket.status in [TicketStatus.AWAITING_VERIFICATION, TicketStatus.VERIFIED]
+        assert res_healthy["evaluation_report"]["is_healthy"] is True
+
+        # Part is already in parts_replaced, so no double deduction
+        spare_part.refresh_from_db()
+        assert spare_part.current_stock == initial_stock
+
+    def test_api_complete_repair_rejects_when_awaiting_verification(self, phase12_setup):
+        client = APIClient()
+        ticket = phase12_setup["ticket"]
+        ticket.status = TicketStatus.AWAITING_VERIFICATION
+        ticket.repair_completed_at = timezone.now()
+        ticket.save()
+
+        url = f"/api/v1/maintenance/tickets/{ticket.id}/complete-repair/"
+        resp = client.post(url, {
+            "repair_performed": "Repeated attempt to complete repair on already completed work order.",
+            "actual_duration_minutes": 30,
+        }, format="json")
+
+        assert resp.status_code == 400
+        assert "already been completed" in resp.data["error"]
+        assert "AWAITING_VERIFICATION" in resp.data["error"]
+
+    def test_api_consume_parts_rejects_when_awaiting_verification(self, phase12_setup):
+        client = APIClient()
+        ticket = phase12_setup["ticket"]
+        spare_part = phase12_setup["spare_part"]
+        ticket.status = TicketStatus.AWAITING_VERIFICATION
+        ticket.repair_completed_at = timezone.now()
+        ticket.save()
+
+        # Attempt to deduct an additional part
+        url = f"/api/v1/maintenance/tickets/{ticket.id}/consume-parts/"
+        resp = client.post(url, {
+            "parts": [{"item_code": "SPR-NEW-PART", "quantity": 1}],
+        }, format="json")
+
+        assert resp.status_code == 400
+        assert "Cannot deduct spare parts" in resp.data["error"]
+
+    def test_api_submit_inspection_rejects_when_awaiting_verification(self, phase12_setup):
+        client = APIClient()
+        ticket = phase12_setup["ticket"]
+        ticket.status = TicketStatus.AWAITING_VERIFICATION
+        ticket.repair_completed_at = timezone.now()
+        ticket.save()
+
+        url = f"/api/v1/maintenance/tickets/{ticket.id}/submit-inspection/"
+        resp = client.post(url, {
+            "confirmed_fault": "Attempt to re-inspect confirmed fault",
+        }, format="json")
+
+        assert resp.status_code == 400
+        assert "Diagnostic inspection already completed" in resp.data["error"]
+
+    def test_rapid_repeated_button_clicks_simulation(self, phase12_setup):
+        ticket = phase12_setup["ticket"]
+        spare_part = phase12_setup["spare_part"]
+
+        # Run 3 consecutive clicks of execute_demo_technician_flow
+        for i in range(3):
+            MaintenanceSimulationService.execute_demo_technician_flow(ticket, mode="HEALTHY")
+            ticket.refresh_from_db()
+
+        # Ticket must cleanly be in awaiting verification / verified
+        assert ticket.status in [TicketStatus.AWAITING_VERIFICATION, TicketStatus.VERIFIED]
+        # Only 1 part deduction was ever performed
+        spare_part.refresh_from_db()
+        assert spare_part.current_stock == Decimal("11.00")  # 12 - 1 = 11
+        # Exactly 1 repair completed transition
+        assert ticket.transitions.filter(new_state=TicketStatus.REPAIR_COMPLETED).count() == 1
+

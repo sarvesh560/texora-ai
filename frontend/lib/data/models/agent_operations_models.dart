@@ -2,11 +2,13 @@ class AgentOperationsOverviewModel {
   final Map<String, WorkerHeartbeatModel> workerHeartbeats;
   final AgentOverallMetricsModel overallMetrics;
   final List<SpecialistAgentModel> specialistAgents;
+  final AiProviderHealthModel? aiProviderHealth;
 
   AgentOperationsOverviewModel({
     required this.workerHeartbeats,
     required this.overallMetrics,
     required this.specialistAgents,
+    this.aiProviderHealth,
   });
 
   factory AgentOperationsOverviewModel.fromJson(Map<String, dynamic> json) {
@@ -26,10 +28,16 @@ class AgentOperationsOverviewModel {
         .map((a) => SpecialistAgentModel.fromJson(a as Map<String, dynamic>))
         .toList();
 
+    final providerHealthRaw = json['ai_provider_health'] as Map<String, dynamic>?;
+    final providerHealth = providerHealthRaw != null
+        ? AiProviderHealthModel.fromJson(providerHealthRaw)
+        : null;
+
     return AgentOperationsOverviewModel(
       workerHeartbeats: heartbeats,
       overallMetrics: metrics,
       specialistAgents: agents,
+      aiProviderHealth: providerHealth,
     );
   }
 }
@@ -278,3 +286,111 @@ class AgentRecentExecutionSummaryModel {
     );
   }
 }
+
+class AiProviderHealthModel {
+  final String routingMode;
+  final String primaryProvider;
+  final String secondaryProvider;
+  final ProviderStatusModel groq;
+  final ProviderStatusModel gemini;
+  final ProviderStatusModel deterministicFallback;
+  final Map<String, dynamic>? lastSuccessfulInference;
+  final String currentFallbackState;
+
+  AiProviderHealthModel({
+    required this.routingMode,
+    required this.primaryProvider,
+    required this.secondaryProvider,
+    required this.groq,
+    required this.gemini,
+    required this.deterministicFallback,
+    this.lastSuccessfulInference,
+    this.currentFallbackState = 'STANDBY',
+  });
+
+  bool get hasVerifiedInference =>
+      lastSuccessfulInference != null &&
+      lastSuccessfulInference!['provider'] != null &&
+      lastSuccessfulInference!['provider'] != 'NONE';
+
+  factory AiProviderHealthModel.fromJson(Map<String, dynamic> json) {
+    return AiProviderHealthModel(
+      routingMode: json['routing_mode'] as String? ?? 'auto',
+      primaryProvider: json['primary_provider'] as String? ?? 'groq',
+      secondaryProvider: json['secondary_provider'] as String? ?? 'gemini',
+      groq: ProviderStatusModel.fromJson(
+          json['groq'] as Map<String, dynamic>? ?? {}),
+      gemini: ProviderStatusModel.fromJson(
+          json['gemini'] as Map<String, dynamic>? ?? {}),
+      deterministicFallback: ProviderStatusModel.fromJson(
+          json['deterministic_fallback'] as Map<String, dynamic>? ?? {}),
+      lastSuccessfulInference:
+          json['last_successful_inference'] as Map<String, dynamic>?,
+      currentFallbackState:
+          json['current_fallback_state'] as String? ?? 'STANDBY',
+    );
+  }
+}
+
+class ProviderStatusModel {
+  final bool configured;
+  final String model;
+  final String status;
+  final String message;
+  final bool ready;
+  final bool circuitBreakerOpen;
+  final String circuitBreakerStatus;
+  final int? latencyMs;
+  final String? lastSuccessfulAt;
+  final bool isStale;
+
+  ProviderStatusModel({
+    required this.configured,
+    required this.model,
+    required this.status,
+    required this.message,
+    required this.ready,
+    this.circuitBreakerOpen = false,
+    this.circuitBreakerStatus = 'CLOSED',
+    this.latencyMs,
+    this.lastSuccessfulAt,
+    this.isStale = false,
+  });
+
+  bool get isOperational => status == 'OPERATIONAL' || status == 'ONLINE';
+  bool get isConfigured => configured || status == 'CONFIGURED' || isOperational;
+  bool get isRateLimited => status == 'RATE_LIMITED' || status == 'BLOCKED_BY_QUOTA';
+  bool get isUnavailable =>
+      status == 'UNAVAILABLE' ||
+      status == 'AUTH_ERROR' ||
+      status == 'SERVICE_UNAVAILABLE';
+  bool get isNotConfigured =>
+      status == 'NOT_CONFIGURED' ||
+      status == 'UNCONFIGURED' ||
+      (!configured && status != 'OPERATIONAL' && status != 'CONFIGURED');
+
+  factory ProviderStatusModel.fromJson(Map<String, dynamic> json) {
+    final statusStr = (json['status'] as String? ?? 'UNKNOWN').toUpperCase();
+    final isConfig = json['configured'] as bool? ??
+        json['is_configured'] as bool? ??
+        (statusStr != 'NOT_CONFIGURED' && statusStr != 'UNCONFIGURED' && statusStr != 'UNKNOWN');
+    final isOp = statusStr == 'OPERATIONAL' || statusStr == 'ONLINE';
+
+    return ProviderStatusModel(
+      configured: isConfig,
+      model: json['model'] as String? ?? '',
+      status: statusStr,
+      message: json['message'] as String? ??
+          json['cooldown_message'] as String? ??
+          '',
+      ready: json['ready'] as bool? ?? (isOp || statusStr == 'CONFIGURED'),
+      circuitBreakerOpen: json['circuit_breaker_open'] as bool? ?? false,
+      circuitBreakerStatus: json['circuit_breaker_status'] as String? ??
+          (json['circuit_breaker_open'] == true ? 'OPEN' : 'CLOSED'),
+      latencyMs: json['latency_ms'] as int?,
+      lastSuccessfulAt: json['last_successful_at'] as String?,
+      isStale: json['is_stale'] as bool? ?? false,
+    );
+  }
+}
+

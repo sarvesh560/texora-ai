@@ -1,11 +1,12 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import '../../core/constants/app_colors.dart';
+import '../../core/theme/texora_design_system.dart';
 import '../../data/services/api_service.dart';
 
-
 class AuditTrailScreen extends StatefulWidget {
-  const AuditTrailScreen({super.key});
+  final VoidCallback? onClose;
+
+  const AuditTrailScreen({super.key, this.onClose});
 
   @override
   State<AuditTrailScreen> createState() => _AuditTrailScreenState();
@@ -96,18 +97,20 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
       context: context,
       builder: (ctx) {
         return AlertDialog(
-          backgroundColor: const Color(0xFF1E293B),
+          backgroundColor: TexoraColors.cardBg,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
-            side: const BorderSide(color: Color(0xFF334155)),
+            side: const BorderSide(color: TexoraColors.cardBorder),
           ),
           title: Row(
             children: [
-              const Icon(Icons.code_rounded, color: AppColors.primaryBlueLight, size: 20),
+              const Icon(Icons.code_rounded, color: TexoraColors.primaryBlue, size: 20),
               const SizedBox(width: 10),
-              Text(
-                'Audit Payload [${log['entity_type']}:${log['entity_id']}]',
-                style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700),
+              Expanded(
+                child: Text(
+                  'Audit Payload [${log['entity_type']}:${log['entity_id']}]',
+                  style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 14, fontWeight: FontWeight.w700),
+                ),
               ),
             ],
           ),
@@ -116,15 +119,15 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
             child: Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF0F172A),
+                color: TexoraColors.inputBg,
                 borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: const Color(0xFF334155)),
+                border: Border.all(color: TexoraColors.cardBorder),
               ),
               child: SingleChildScrollView(
                 child: SelectableText(
                   jsonStr,
                   style: const TextStyle(
-                    color: Color(0xFF38BDF8),
+                    color: TexoraColors.textPrimary,
                     fontFamily: 'monospace',
                     fontSize: 12,
                   ),
@@ -135,7 +138,7 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Close', style: TextStyle(color: Color(0xFF94A3B8))),
+              child: const Text('Close', style: TextStyle(color: TexoraColors.textMuted)),
             ),
           ],
         );
@@ -146,7 +149,7 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: const Color(0xFF0B1120),
+      color: TexoraColors.workspaceBg,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -167,14 +170,22 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
 
   Widget _buildHeader() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       decoration: const BoxDecoration(
-        color: Color(0xFF0F172A),
-        border: Border(bottom: BorderSide(color: Color(0xFF1E293B))),
+        color: TexoraColors.cardBg,
+        border: Border(bottom: BorderSide(color: TexoraColors.cardBorder)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
+          if (widget.onClose != null) ...[
+            IconButton(
+              icon: const Icon(Icons.arrow_back_rounded, color: TexoraColors.primaryBlue),
+              onPressed: widget.onClose,
+              tooltip: 'Back',
+            ),
+            const SizedBox(width: 8),
+          ],
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -187,15 +198,15 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFA855F7).withAlpha(35),
+                        color: TexoraColors.purple.withAlpha(25),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Icon(Icons.shield_outlined, color: Color(0xFFA855F7), size: 20),
+                      child: const Icon(Icons.shield_outlined, color: TexoraColors.purple, size: 20),
                     ),
                     const Text(
                       'Immutable Audit Trail & Governance',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: TexoraColors.textPrimary,
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
                         letterSpacing: -0.4,
@@ -204,13 +215,13 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF1E293B),
+                        color: TexoraColors.inputBg,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFF334155)),
+                        border: Border.all(color: TexoraColors.cardBorder),
                       ),
                       child: const Text(
                         'Append-Only Cryptographic Log',
-                        style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.w600),
+                        style: TextStyle(color: TexoraColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w600),
                       ),
                     ),
                   ],
@@ -218,7 +229,7 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
                 const SizedBox(height: 4),
                 const Text(
                   'Complete traceability of AI agent inferences, human manager approvals, telemetry anomalies, and machine interventions.',
-                  style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                  style: TextStyle(color: TexoraColors.textSecondary, fontSize: 12),
                 ),
               ],
             ),
@@ -226,10 +237,10 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
           const SizedBox(width: 16),
           OutlinedButton.icon(
             onPressed: _loadAuditLogs,
-            icon: const Icon(Icons.refresh_rounded, size: 16, color: Color(0xFF94A3B8)),
-            label: const Text('Refresh Logs', style: TextStyle(color: Color(0xFFCBD5E1), fontSize: 12)),
+            icon: const Icon(Icons.refresh_rounded, size: 16, color: TexoraColors.textSecondary),
+            label: const Text('Refresh Logs', style: TextStyle(color: TexoraColors.textSecondary, fontSize: 12)),
             style: OutlinedButton.styleFrom(
-              side: const BorderSide(color: Color(0xFF334155)),
+              side: const BorderSide(color: TexoraColors.cardBorder),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             ),
           ),
@@ -242,8 +253,8 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       decoration: const BoxDecoration(
-        color: Color(0xFF0F172A),
-        border: Border(bottom: BorderSide(color: Color(0xFF1E293B))),
+        color: TexoraColors.cardBg,
+        border: Border(bottom: BorderSide(color: TexoraColors.cardBorder)),
       ),
       child: Row(
         children: [
@@ -251,15 +262,15 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10),
             decoration: BoxDecoration(
-              color: const Color(0xFF1E293B),
+              color: TexoraColors.inputBg,
               borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: const Color(0xFF334155)),
+              border: Border.all(color: TexoraColors.cardBorder),
             ),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
                 value: _selectedEntityType,
-                dropdownColor: const Color(0xFF1E293B),
-                style: const TextStyle(color: Colors.white, fontSize: 12),
+                dropdownColor: TexoraColors.cardBg,
+                style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 12, fontWeight: FontWeight.w600),
                 items: const [
                   DropdownMenuItem(value: 'ALL', child: Text('All Entities')),
                   DropdownMenuItem(value: 'INCIDENT', child: Text('Incidents')),
@@ -284,15 +295,15 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10),
             decoration: BoxDecoration(
-              color: const Color(0xFF1E293B),
+              color: TexoraColors.inputBg,
               borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: const Color(0xFF334155)),
+              border: Border.all(color: TexoraColors.cardBorder),
             ),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
                 value: _selectedActorType,
-                dropdownColor: const Color(0xFF1E293B),
-                style: const TextStyle(color: Colors.white, fontSize: 12),
+                dropdownColor: TexoraColors.cardBg,
+                style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 12, fontWeight: FontWeight.w600),
                 items: const [
                   DropdownMenuItem(value: 'ALL', child: Text('All Actors')),
                   DropdownMenuItem(value: 'AI_AGENT', child: Text('AI Agents')),
@@ -318,14 +329,14 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
               child: TextField(
                 controller: _searchController,
                 onChanged: (val) => setState(() => _searchQuery = val.trim()),
-                style: const TextStyle(color: Colors.white, fontSize: 12),
+                style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 12),
                 decoration: InputDecoration(
                   hintText: 'Search entity ID, actor, description, or action...',
-                  hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
-                  prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 16),
+                  hintStyle: const TextStyle(color: TexoraColors.textMuted, fontSize: 11),
+                  prefixIcon: const Icon(Icons.search_rounded, color: TexoraColors.textMuted, size: 16),
                   suffixIcon: _searchQuery.isNotEmpty
                       ? IconButton(
-                          icon: const Icon(Icons.close_rounded, size: 14, color: Color(0xFF94A3B8)),
+                          icon: const Icon(Icons.close_rounded, size: 14, color: TexoraColors.textMuted),
                           onPressed: () {
                             _searchController.clear();
                             setState(() => _searchQuery = '');
@@ -333,10 +344,10 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
                         )
                       : null,
                   filled: true,
-                  fillColor: const Color(0xFF1E293B),
+                  fillColor: TexoraColors.inputBg,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(6),
-                    borderSide: const BorderSide(color: Color(0xFF334155)),
+                    borderSide: const BorderSide(color: TexoraColors.cardBorder),
                   ),
                   contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 10),
                 ),
@@ -354,9 +365,9 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            CircularProgressIndicator(color: AppColors.primaryBlueLight),
+            CircularProgressIndicator(color: TexoraColors.primaryBlue),
             SizedBox(height: 16),
-            Text('Loading audit trail records...', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+            Text('Loading audit trail records...', style: TextStyle(color: TexoraColors.textSecondary, fontSize: 13)),
           ],
         ),
       );
@@ -364,7 +375,7 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
 
     if (_errorMessage != null) {
       return Center(
-        child: Text(_errorMessage!, style: const TextStyle(color: AppColors.errorRed, fontSize: 13)),
+        child: Text(_errorMessage!, style: const TextStyle(color: TexoraColors.critical, fontSize: 13)),
       );
     }
 
@@ -374,7 +385,7 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
       return const Center(
         child: Text(
           'No Audit Logs Found',
-          style: TextStyle(color: Color(0xFF64748B), fontSize: 14, fontWeight: FontWeight.w600),
+          style: TextStyle(color: TexoraColors.textMuted, fontSize: 14, fontWeight: FontWeight.w600),
         ),
       );
     }
@@ -383,9 +394,12 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
       padding: const EdgeInsets.all(24),
       child: Container(
         decoration: BoxDecoration(
-          color: const Color(0xFF1E293B),
+          color: TexoraColors.cardBg,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: const Color(0xFF334155)),
+          border: Border.all(color: TexoraColors.cardBorder),
+          boxShadow: const [
+            BoxShadow(color: Color(0x05000000), blurRadius: 6, offset: Offset(0, 2)),
+          ],
         ),
         child: Table(
           columnWidths: const {
@@ -401,8 +415,8 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
             // Table Header
             TableRow(
               decoration: const BoxDecoration(
-                color: Color(0xFF0F172A),
-                border: Border(bottom: BorderSide(color: Color(0xFF334155), width: 1.2)),
+                color: TexoraColors.workspaceBg,
+                border: Border(bottom: BorderSide(color: TexoraColors.cardBorder, width: 1.2)),
               ),
               children: [
                 _buildHeaderCell('TIMESTAMP'),
@@ -424,14 +438,14 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
               final actorId = log['actor_id'] ?? '';
               final desc = log['description'] ?? '';
 
-              Color actorColor = const Color(0xFF94A3B8);
-              if (actorType == 'AI_AGENT') actorColor = const Color(0xFFA855F7);
-              if (actorType == 'MANAGER') actorColor = AppColors.successGreen;
-              if (actorType == 'OPERATOR') actorColor = const Color(0xFF38BDF8);
+              Color actorColor = TexoraColors.textSecondary;
+              if (actorType == 'AI_AGENT') actorColor = TexoraColors.purple;
+              if (actorType == 'MANAGER') actorColor = TexoraColors.success;
+              if (actorType == 'OPERATOR') actorColor = TexoraColors.info;
 
               return TableRow(
                 decoration: const BoxDecoration(
-                  border: Border(bottom: BorderSide(color: Color(0xFF334155), width: 0.8)),
+                  border: Border(bottom: BorderSide(color: TexoraColors.cardBorder, width: 0.8)),
                 ),
                 children: [
                   // Timestamp
@@ -439,7 +453,7 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     child: Text(
                       ts.length > 19 ? ts.substring(0, 19).replaceAll('T', ' ') : ts,
-                      style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontFamily: 'monospace'),
+                      style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 11, fontFamily: 'monospace'),
                     ),
                   ),
 
@@ -451,11 +465,11 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
                       children: [
                         Text(
                           entType,
-                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
+                          style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 11, fontWeight: FontWeight.w700),
                         ),
                         Text(
                           entId,
-                          style: const TextStyle(color: Color(0xFF64748B), fontSize: 10, fontFamily: 'monospace'),
+                          style: const TextStyle(color: TexoraColors.textMuted, fontSize: 10, fontFamily: 'monospace'),
                         ),
                       ],
                     ),
@@ -467,13 +481,13 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF0F172A),
+                        color: TexoraColors.inputBg,
                         borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: const Color(0xFF334155)),
+                        border: Border.all(color: TexoraColors.cardBorder),
                       ),
                       child: Text(
                         action,
-                        style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 10, fontWeight: FontWeight.w700),
+                        style: const TextStyle(color: TexoraColors.textPrimary, fontSize: 10, fontWeight: FontWeight.w700),
                       ),
                     ),
                   ),
@@ -490,7 +504,7 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
                         ),
                         Text(
                           actorId,
-                          style: const TextStyle(color: Color(0xFF64748B), fontSize: 10),
+                          style: const TextStyle(color: TexoraColors.textMuted, fontSize: 10),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ],
@@ -502,7 +516,7 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     child: Text(
                       desc,
-                      style: const TextStyle(color: Color(0xFFE2E8F0), fontSize: 11.5, height: 1.3),
+                      style: const TextStyle(color: TexoraColors.textSecondary, fontSize: 11.5, height: 1.3),
                     ),
                   ),
 
@@ -510,7 +524,7 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                     child: IconButton(
-                      icon: const Icon(Icons.code_rounded, size: 16, color: Color(0xFF94A3B8)),
+                      icon: const Icon(Icons.code_rounded, size: 16, color: TexoraColors.textMuted),
                       tooltip: 'View JSON Payload',
                       onPressed: () => _showPayloadModal(log),
                     ),
@@ -530,7 +544,7 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
       child: Text(
         label,
         style: const TextStyle(
-          color: Color(0xFF64748B),
+          color: TexoraColors.textMuted,
           fontSize: 10,
           fontWeight: FontWeight.w700,
           letterSpacing: 0.6,

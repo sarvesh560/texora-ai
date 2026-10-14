@@ -65,6 +65,7 @@ LOCAL_APPS = [
     "apps.audit_logs.apps.AuditLogsConfig",
     "apps.simulation.apps.SimulationConfig",
     "apps.digital_twin.apps.DigitalTwinConfig",
+    "apps.copilot.apps.CopilotConfig",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -185,3 +186,8 @@ cors_raw = os.getenv(
 CORS_ALLOWED_ORIGINS = [origin.strip() for origin in cors_raw.split(",") if origin.strip()]
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_ALL_ORIGINS = False
+
+# Google Gemini AI Settings
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash").strip()
+

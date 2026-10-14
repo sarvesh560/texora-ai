@@ -157,7 +157,7 @@ class AgentExecutionViewSet(viewsets.ModelViewSet):
                     "Produce structured diagnostic findings with confidence scores",
                     "Report Gemini LLM reasoning or deterministic fallback provenance",
                 ],
-                "default_model": "gemini-2.5-flash",
+                "default_model": "gemini-3.8-flash",
                 "default_actions": ["DIAGNOSE_MACHINE_HEALTH", "EVALUATE_VIBRATION_SPECTRUM", "QUERY_HISTORICAL_TELEMETRY"],
             },
             {
@@ -171,7 +171,7 @@ class AgentExecutionViewSet(viewsets.ModelViewSet):
                     "Propose maintenance actions without unauthorized dispatch",
                     "Track maintenance ticket lifecycle through to recovery",
                 ],
-                "default_model": "deterministic-maintenance-v1",
+                "default_model": "gemini-3.8-flash",
                 "default_actions": ["CREATE_MAINTENANCE_TICKET", "SCHEDULE_INSPECTION", "ASSIGN_TECHNICIAN"],
             },
             {
@@ -185,7 +185,7 @@ class AgentExecutionViewSet(viewsets.ModelViewSet):
                     "Display manager approval status & prevent premature stock deduction",
                     "Never deduct inventory before authorized manager approval",
                 ],
-                "default_model": "deterministic-inventory-v1",
+                "default_model": "gemini-3.8-flash",
                 "default_actions": ["RESERVE_SPARE_PART", "CREATE_PROCUREMENT_REQUEST", "CHECK_STOCK_LEVELS"],
             },
             {
@@ -198,7 +198,7 @@ class AgentExecutionViewSet(viewsets.ModelViewSet):
                     "Identify compatible alternative machinery in same department",
                     "Support Digital Twin What-If recovery planning & rerouting",
                 ],
-                "default_model": "deterministic-production-v1",
+                "default_model": "gemini-3.8-flash",
                 "default_actions": ["REROUTE_PRODUCTION_BATCH", "PAUSE_PRODUCTION_BATCH", "CALCULATE_CAPACITY_BUFFER"],
             },
         ]
@@ -208,7 +208,10 @@ class AgentExecutionViewSet(viewsets.ModelViewSet):
             a_type = cfg["type"]
             agent_def = AgentDefinition.objects.filter(agent_type=a_type).first()
             name = agent_def.name if agent_def else cfg["default_name"]
+            active_default_model = os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b")
             model_name = agent_def.model_name if agent_def else cfg["default_model"]
+            if "claude" in model_name.lower() or "gemini-1.5-pro" in model_name.lower():
+                model_name = active_default_model
             permitted_actions = agent_def.permitted_actions if (agent_def and agent_def.permitted_actions) else cfg["default_actions"]
             is_enabled = agent_def.is_enabled if agent_def else True
 
@@ -252,17 +255,31 @@ class AgentExecutionViewSet(viewsets.ModelViewSet):
                     else:
                         current_status = "IDLE"
 
-                provenance = "Deterministic Engine"
-                if a_type == AgentType.MACHINE_HEALTH:
-                    if "gemini" in model_name.lower() or "gemini" in latest_exec.execution_summary.lower():
-                        if "fallback" in latest_exec.execution_summary.lower() or "RATE_LIMITED" in latest_exec.execution_summary:
-                            provenance = "Deterministic Fallback (Rate Limit Guard)"
-                        else:
-                            provenance = "Gemini LLM Reasoning (Google Gemini 2.5 Flash)"
-                    else:
-                        provenance = "Deterministic Diagnostic Rules"
+                ctx_payload = latest_exec.context_payload or {}
+                rsource = ctx_payload.get("reasoning_source") or ""
+                pstatus = ctx_payload.get("provider_attempt_status") or ""
+
+                # Requirement 1: Do not use an agent's default model label as proof of actual cloud model used
+                actual_exec_model = ctx_payload.get("model_name") or model_name
+                if "claude" in actual_exec_model.lower() or "gemini-1.5-pro" in actual_exec_model.lower():
+                    actual_exec_model = active_default_model
+
+                if rsource == "GROQ_LIVE":
+                    provenance = f"GroqCloud Live AI ({actual_exec_model})"
+                elif rsource == "GEMINI_LIVE":
+                    provenance = f"Gemini Live AI ({actual_exec_model})"
+                elif "RATE_LIMITED" in pstatus or "rate_limited" in latest_exec.execution_summary.lower() or "blocked_by_quota" in pstatus.lower():
+                    provenance = "Deterministic Fallback (Rate Limit Guard)"
+                elif "UNAVAILABLE" in pstatus or "high demand" in latest_exec.execution_summary.lower():
+                    provenance = "Deterministic Fallback (High Demand Guard)"
+                elif "fallback" in latest_exec.execution_summary.lower() or "FALLBACK" in rsource:
+                    provenance = f"Deterministic Fallback ({actual_exec_model})"
+                elif "groq" in actual_exec_model.lower() or "qwen" in actual_exec_model.lower() or "llama" in actual_exec_model.lower():
+                    provenance = f"GroqCloud AI Assisted ({actual_exec_model})"
+                elif "gemini" in actual_exec_model.lower():
+                    provenance = f"Gemini AI Assisted ({actual_exec_model})"
                 else:
-                    provenance = f"Deterministic Specialist Logic ({model_name})"
+                    provenance = f"Deterministic Domain Engine ({actual_exec_model})"
 
                 latest_data = {
                     "execution_id": str(latest_exec.execution_id),
@@ -323,6 +340,10 @@ class AgentExecutionViewSet(viewsets.ModelViewSet):
                 "recent_executions": recent_list,
             })
 
+        from apps.ai_agents.llm_client import MultiProviderRouter
+        router = MultiProviderRouter()
+        provider_health_summary = router.get_provider_health()
+
         return Response({
             "worker_heartbeats": heartbeats,
             "overall_metrics": {
@@ -333,7 +354,15 @@ class AgentExecutionViewSet(viewsets.ModelViewSet):
                 "pending_approvals": pending_approvals_count,
             },
             "specialist_agents": specialist_agents,
+            "ai_provider_health": provider_health_summary,
         })
+
+    @action(detail=False, methods=["get"], url_path="provider-health")
+    def provider_health(self, request):
+        """Returns live multi-provider connectivity, circuit breaker states, and quota statuses."""
+        from apps.ai_agents.llm_client import MultiProviderRouter
+        router = MultiProviderRouter()
+        return Response(router.get_provider_health())
 
     @action(detail=False, methods=["get"], url_path="audit-details/(?P<exec_id>[^/.]+)")
     def audit_details(self, request, exec_id=None):
@@ -406,12 +435,38 @@ class AgentExecutionViewSet(viewsets.ModelViewSet):
         for sensitive_key in ["api_key", "password", "secret", "token", "credentials"]:
             clean_context.pop(sensitive_key, None)
 
+        meta = clean_context.get("metadata", {}) if isinstance(clean_context.get("metadata"), dict) else {}
+        reasoning_src = (
+            meta.get("reasoning_source")
+            or clean_context.get("reasoning_source")
+            or ("GROQ_LIVE" if "groq" in exec_obj.execution_summary.lower() and "fallback" not in exec_obj.execution_summary.lower() else ("GEMINI_LIVE" if "gemini" in exec_obj.execution_summary.lower() and "fallback" not in exec_obj.execution_summary.lower() else "DETERMINISTIC_FALLBACK"))
+        )
+        prov_status = (
+            meta.get("provider_attempt_status")
+            or clean_context.get("provider_attempt_status")
+            or (reasoning_src if reasoning_src in ["GROQ_LIVE", "GEMINI_LIVE"] else ("PROVIDER_RATE_LIMITED" if "rate_limited" in exec_obj.execution_summary.lower() else "DETERMINISTIC_FALLBACK"))
+        )
+        model_name = (
+            meta.get("model_name")
+            or clean_context.get("model_name")
+            or exec_obj.agent.model_name
+        )
+
+        is_live_ai = reasoning_src in ["GROQ_LIVE", "GEMINI_LIVE", "MOCK_AI_SUCCESS"]
+
         return Response({
             "execution_id": str(exec_obj.execution_id),
             "id": exec_obj.id,
             "agent_type": exec_obj.agent.agent_type,
             "agent_name": exec_obj.agent.name,
-            "model_name": exec_obj.agent.model_name,
+            "model_name": model_name,
+            "reasoning_source": reasoning_src,
+            "provider_attempt_status": prov_status,
+            "fallback_status": meta.get("fallback_status", clean_context.get("fallback_status", not is_live_ai)),
+            "is_live_ai": is_live_ai,
+            "execution_error": meta.get("execution_error") or clean_context.get("execution_errors"),
+            "structured_output": clean_context.get("structured_output"),
+            "input_context": clean_context.get("input_context"),
             "status": exec_obj.status,
             "trigger_event": exec_obj.trigger_event,
             "incident": {
@@ -640,7 +695,11 @@ class MultiAgentCoordinationViewSet(viewsets.ViewSet):
     @action(detail=False, methods=["post"], url_path="maintenance/(?P<incident_id>[^/.]+)")
     def coordinate_maintenance(self, request, incident_id=None):
         coordinator = MaintenanceCoordinatorAgent()
-        result = coordinator.coordinate_maintenance(int(incident_id), health_diagnosis=request.data.get("diagnosis"))
+        result = coordinator.coordinate_maintenance(
+            int(incident_id),
+            health_diagnosis=request.data.get("diagnosis"),
+            force_provider=request.data.get("force_provider"),
+        )
         return Response(result)
 
     @action(detail=False, methods=["post"], url_path="inventory/(?P<incident_id>[^/.]+)")
@@ -650,6 +709,7 @@ class MultiAgentCoordinationViewSet(viewsets.ViewSet):
             int(incident_id),
             health_diagnosis=request.data.get("diagnosis"),
             maintenance_recommendation=request.data.get("maintenance"),
+            force_provider=request.data.get("force_provider"),
         )
         return Response(result)
 
@@ -657,7 +717,14 @@ class MultiAgentCoordinationViewSet(viewsets.ViewSet):
     def coordinate_production(self, request, incident_id=None):
         agent = ProductionImpactAgent()
         downtime = float(request.data.get("estimated_downtime_hours", 1.5))
-        result = agent.evaluate_production_impact(int(incident_id), estimated_downtime_hours=downtime)
+        result = agent.evaluate_production_impact(
+            int(incident_id),
+            estimated_downtime_hours=downtime,
+            health_diagnosis=request.data.get("diagnosis"),
+            maintenance_recommendation=request.data.get("maintenance"),
+            inventory_assessment=request.data.get("inventory"),
+            force_provider=request.data.get("force_provider"),
+        )
         return Response(result)
 
 
