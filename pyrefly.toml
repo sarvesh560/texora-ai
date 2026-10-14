@@ -1,0 +1,3 @@
+preset = "basic"
+search-path = ["backend"]
+python-interpreter-path = "backend/.venv/Scripts/python.exe"

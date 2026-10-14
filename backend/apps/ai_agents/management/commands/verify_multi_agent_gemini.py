@@ -196,6 +196,7 @@ class Command(BaseCommand):
                 has_service_unavailable = True
                 all_passed = False
             elif r["status"] != "PASS":
+                .
                 all_passed = False
 
         self.stdout.write("=" * 92)
