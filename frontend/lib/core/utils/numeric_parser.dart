@@ -161,49 +161,6 @@ class NumericParser {
       "Expected integer or numeric string for ${fieldName ?? 'field'}, got ${value.runtimeType}: '$value'",
     );
   }
-
-  /// Safely parses an optional num from num, String ("5", "5.2", "480.00"), or null.
-  /// Returns null if [value] is null or empty string.
-  /// Throws [FormatException] if [value] is an invalid non-empty string or invalid type.
-  static num? parseNullableNum(dynamic value, {String? fieldName}) {
-    if (value == null) return null;
-    if (value is num) return value;
-    if (value is String) {
-      final trimmed = value.trim();
-      if (trimmed.isEmpty) return null;
-      final parsed = num.tryParse(trimmed);
-      if (parsed != null) return parsed;
-      throw FormatException(
-        "Invalid numeric string for ${fieldName ?? 'field'}: '$value'",
-      );
-    }
-    throw FormatException(
-      "Expected number or numeric string for ${fieldName ?? 'field'}, got ${value.runtimeType}: '$value'",
-    );
-  }
-
-  /// Parses a num with a safe fallback default if [value] is null or empty string.
-  /// Throws [FormatException] if [value] is a malformed string or invalid type.
-  static num parseNumWithFallback(
-    dynamic value,
-    num fallback, {
-    String? fieldName,
-  }) {
-    if (value == null) return fallback;
-    if (value is num) return value;
-    if (value is String) {
-      final trimmed = value.trim();
-      if (trimmed.isEmpty) return fallback;
-      final parsed = num.tryParse(trimmed);
-      if (parsed != null) return parsed;
-      throw FormatException(
-        "Invalid numeric string for ${fieldName ?? 'field'}: '$value'",
-      );
-    }
-    throw FormatException(
-      "Expected number or numeric string for ${fieldName ?? 'field'}, got ${value.runtimeType}: '$value'",
-    );
-  }
 }
 
 // Top-level convenience aliases
@@ -252,20 +209,6 @@ int parseIntWithFallback(
   String? fieldName,
 }) =>
     NumericParser.parseIntWithFallback(
-      value,
-      fallback,
-      fieldName: fieldName,
-    );
-
-num? parseNullableNum(dynamic value, {String? fieldName}) =>
-    NumericParser.parseNullableNum(value, fieldName: fieldName);
-
-num parseNumWithFallback(
-  dynamic value,
-  num fallback, {
-  String? fieldName,
-}) =>
-    NumericParser.parseNumWithFallback(
       value,
       fallback,
       fieldName: fieldName,

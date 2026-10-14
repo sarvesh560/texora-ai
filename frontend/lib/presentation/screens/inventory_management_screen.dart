@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/texora_design_system.dart';
-import '../../core/utils/numeric_parser.dart';
 import '../../data/services/api_service.dart';
 import '../widgets/design_system/design_system.dart';
 
@@ -93,26 +92,10 @@ class _InventoryManagementScreenState extends State<InventoryManagementScreen> {
       );
     }
 
-    final totalItems = parseIntWithFallback(
-      _summary['total_items'],
-      _items.length,
-      fieldName: 'total_items',
-    );
-    final totalVal = parseDoubleWithFallback(
-      _summary['total_inventory_value_inr'] ?? _summary['total_inventory_valuation'],
-      384000.0,
-      fieldName: 'total_inventory_value_inr',
-    );
-    final lowStock = parseIntWithFallback(
-      _summary['low_stock_count'],
-      2,
-      fieldName: 'low_stock_count',
-    );
-    final criticalCount = parseIntWithFallback(
-      _summary['critical_shortage_count'] ?? _summary['critical_outage_count'],
-      0,
-      fieldName: 'critical_shortage_count',
-    );
+    final totalItems = (_summary['total_items'] as num?)?.toInt() ?? _items.length;
+    final totalVal = (_summary['total_inventory_value_inr'] as num?)?.toDouble() ?? 384000.0;
+    final lowStock = (_summary['low_stock_count'] as num?)?.toInt() ?? 2;
+    final criticalCount = (_summary['critical_shortage_count'] as num?)?.toInt() ?? 0;
     final recommendations = (_summary['ai_recommendations'] as List?)?.cast<Map<String, dynamic>>() ?? [];
 
     final filtered = _items.where((it) {
@@ -453,10 +436,10 @@ class _InventoryManagementScreenState extends State<InventoryManagementScreen> {
                                     ],
                                   ),
                                   ...filtered.map((item) {
-                                    final currentStock = parseDoubleWithFallback(item['current_stock'], 0.0, fieldName: 'current_stock');
-                                    final reorderPoint = parseDoubleWithFallback(item['reorder_point'], 10.0, fieldName: 'reorder_point');
-                                    final unit = (item['unit'] ?? 'units').toString();
-                                    final cost = parseDoubleWithFallback(item['unit_cost'], 0.0, fieldName: 'unit_cost');
+                                    final currentStock = (item['current_stock'] as num?)?.toDouble() ?? 0.0;
+                                    final reorderPoint = (item['reorder_point'] as num?)?.toDouble() ?? 10.0;
+                                    final unit = item['unit'] ?? 'units';
+                                    final cost = (item['unit_cost'] as num?)?.toDouble() ?? 0.0;
                                     final isLow = currentStock <= reorderPoint;
 
                                     return TableRow(
